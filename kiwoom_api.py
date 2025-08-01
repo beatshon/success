@@ -11,6 +11,25 @@ from PyQt5.QtWidgets import *
 from loguru import logger
 import pandas as pd
 from datetime import datetime, timedelta
+from enum import Enum
+
+class OrderType(Enum):
+    """주문 타입 정의"""
+    BUY = "신규매수"
+    SELL = "신규매도"
+    BUY_CANCEL = "매수취소"
+    SELL_CANCEL = "매도취소"
+    BUY_MODIFY = "매수정정"
+    SELL_MODIFY = "매도정정"
+
+class OrderStatus(Enum):
+    """주문 상태 정의"""
+    PENDING = "접수"
+    CONFIRMED = "확인"
+    PARTIAL_FILLED = "부분체결"
+    FILLED = "체결"
+    CANCELLED = "취소"
+    REJECTED = "거부"
 
 class KiwoomAPI(QAxWidget):
     """
@@ -45,6 +64,11 @@ class KiwoomAPI(QAxWidget):
         self.order_info = {}
         self.position_info = {}
         self.deposit_info = {} # 예수금 정보를 저장할 딕셔너리
+        
+        # 주문 관리
+        self.pending_orders = {}  # 대기 중인 주문들
+        self.order_history = {}   # 주문 내역
+        self.max_retry_count = 3  # 최대 재시도 횟수
         
         # 실시간 데이터 구독
         self.real_data_codes = set()
@@ -314,23 +338,36 @@ class KiwoomAPI(QAxWidget):
                 price = int(self.dynamicCall("GetChejanData(int)", 901).strip())
                 order_status = self.dynamicCall("GetChejanData(int)", 913).strip()
                 
+                # 체결 수량과 미체결 수량
+                filled_quantity = int(self.dynamicCall("GetChejanData(int)", 911).strip())
+                unfilled_quantity = int(self.dynamicCall("GetChejanData(int)", 912).strip())
+                
                 order_info = {
                     'order_no': order_no,
                     'code': code,
                     'order_type': order_type,
                     'quantity': quantity,
                     'price': price,
+                    'filled_quantity': filled_quantity,
+                    'unfilled_quantity': unfilled_quantity,
                     'status': order_status,
                     'timestamp': datetime.now()
                 }
                 
+                # 주문 상태 업데이트
                 self.order_info[order_no] = order_info
+                
+                # 대기 중인 주문에서 제거 (완료된 경우)
+                if order_no in self.pending_orders:
+                    if order_status in ["체결", "취소", "거부"]:
+                        completed_order = self.pending_orders.pop(order_no)
+                        self.order_history[order_no] = completed_order
                 
                 # 주문 콜백 호출
                 if self.on_order_callback:
                     self.on_order_callback(order_info)
                 
-                logger.info(f"주문 체결: {code} - {order_type} - {quantity}주 - {price:,}원 - {order_status}")
+                logger.info(f"주문 체결: {code} - {order_type} - {filled_quantity}/{quantity}주 - {price:,}원 - {order_status}")
                 
         except Exception as e:
             logger.error(f"체결잔고 데이터 처리 오류: {e}")
@@ -359,31 +396,123 @@ class KiwoomAPI(QAxWidget):
         except Exception as e:
             logger.error(f"실시간 데이터 구독 해제 오류: {e}")
     
-    def order_stock(self, account, code, quantity, price, order_type="신규매수"):
-        """주식 주문"""
+    def validate_order(self, account, code, quantity, price, order_type):
+        """주문 유효성 검증"""
         try:
+            # 기본 검증
+            if not account or not code or quantity <= 0 or price <= 0:
+                logger.error("주문 파라미터 오류")
+                return False, "주문 파라미터 오류"
+            
+            # 계좌 정보 확인
+            if not self.account_info:
+                logger.error("계좌 정보가 없습니다")
+                return False, "계좌 정보 없음"
+            
+            # 예수금 확인 (매수인 경우)
+            if order_type in ["신규매수", "매수정정"]:
+                deposit = self.get_deposit_info(account)
+                required_amount = quantity * price
+                if deposit.get('예수금', 0) < required_amount:
+                    logger.error(f"예수금 부족: 필요 {required_amount:,}원, 보유 {deposit.get('예수금', 0):,}원")
+                    return False, "예수금 부족"
+            
+            # 보유 주식 확인 (매도인 경우)
+            if order_type in ["신규매도", "매도정정"]:
+                position = self.get_position_info(account)
+                if code in position:
+                    available_quantity = position[code].get('보유수량', 0)
+                    if available_quantity < quantity:
+                        logger.error(f"보유 주식 부족: 필요 {quantity}주, 보유 {available_quantity}주")
+                        return False, "보유 주식 부족"
+                else:
+                    logger.error(f"보유하지 않은 종목: {code}")
+                    return False, "보유하지 않은 종목"
+            
+            return True, "검증 통과"
+            
+        except Exception as e:
+            logger.error(f"주문 검증 오류: {e}")
+            return False, f"검증 오류: {e}"
+
+    def order_stock(self, account, code, quantity, price, order_type="신규매수", retry_count=0):
+        """주식 주문 (개선된 버전)"""
+        try:
+            # 주문 검증
+            is_valid, message = self.validate_order(account, code, quantity, price, order_type)
+            if not is_valid:
+                logger.error(f"주문 검증 실패: {message}")
+                return None
+            
+            # 주문 전송
             order_no = self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString)",
                                        "주식주문", "0101", account, 1, code, quantity, price, order_type)
             
             if order_no > 0:
-                logger.info(f"주문 전송: {code} - {order_type} - {quantity}주 - {price:,}원 (주문번호: {order_no})")
+                # 대기 중인 주문에 추가
+                pending_order = {
+                    'order_no': order_no,
+                    'account': account,
+                    'code': code,
+                    'quantity': quantity,
+                    'price': price,
+                    'order_type': order_type,
+                    'retry_count': retry_count,
+                    'timestamp': datetime.now(),
+                    'status': OrderStatus.PENDING.value
+                }
+                self.pending_orders[order_no] = pending_order
+                
+                logger.info(f"주문 전송 성공: {code} - {order_type} - {quantity}주 - {price:,}원 (주문번호: {order_no})")
                 return order_no
             else:
                 logger.error(f"주문 전송 실패: {order_no}")
-                return None
+                
+                # 재시도 로직
+                if retry_count < self.max_retry_count:
+                    logger.info(f"주문 재시도 중... ({retry_count + 1}/{self.max_retry_count})")
+                    time.sleep(1)  # 1초 대기
+                    return self.order_stock(account, code, quantity, price, order_type, retry_count + 1)
+                else:
+                    logger.error(f"주문 최대 재시도 횟수 초과")
+                    return None
                 
         except Exception as e:
             logger.error(f"주문 전송 오류: {e}")
             return None
+
+    def buy_stock(self, account, code, quantity, price):
+        """매수 주문"""
+        return self.order_stock(account, code, quantity, price, OrderType.BUY.value)
     
+    def sell_stock(self, account, code, quantity, price):
+        """매도 주문"""
+        return self.order_stock(account, code, quantity, price, OrderType.SELL.value)
+    
+    def buy_market_order(self, account, code, quantity):
+        """시장가 매수"""
+        return self.order_stock(account, code, quantity, 0, OrderType.BUY.value)
+    
+    def sell_market_order(self, account, code, quantity):
+        """시장가 매도"""
+        return self.order_stock(account, code, quantity, 0, OrderType.SELL.value)
+
     def cancel_order(self, account, order_no, code, quantity):
-        """주문 취소"""
+        """주문 취소 (개선된 버전)"""
         try:
+            # 취소할 주문이 대기 중인지 확인
+            if order_no not in self.pending_orders:
+                logger.error(f"취소할 주문을 찾을 수 없음: {order_no}")
+                return None
+            
+            pending_order = self.pending_orders[order_no]
+            
+            # 주문 취소
             result = self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString)",
                                      "주문취소", "0101", account, 2, code, quantity, 0, "주문취소")
             
             if result > 0:
-                logger.info(f"주문 취소: {code} - {order_no}")
+                logger.info(f"주문 취소 요청: {code} - {order_no}")
                 return result
             else:
                 logger.error(f"주문 취소 실패: {result}")
@@ -392,6 +521,63 @@ class KiwoomAPI(QAxWidget):
         except Exception as e:
             logger.error(f"주문 취소 오류: {e}")
             return None
+
+    def modify_order(self, account, order_no, code, quantity, price):
+        """주문 정정"""
+        try:
+            # 정정할 주문이 대기 중인지 확인
+            if order_no not in self.pending_orders:
+                logger.error(f"정정할 주문을 찾을 수 없음: {order_no}")
+                return None
+            
+            pending_order = self.pending_orders[order_no]
+            original_type = pending_order['order_type']
+            
+            # 매수/매도에 따른 정정 타입 결정
+            if "매수" in original_type:
+                modify_type = OrderType.BUY_MODIFY.value
+            else:
+                modify_type = OrderType.SELL_MODIFY.value
+            
+            # 주문 정정
+            result = self.dynamicCall("SendOrder(QString, QString, QString, int, QString, int, int, QString)",
+                                     "주문정정", "0101", account, 3, code, quantity, price, modify_type)
+            
+            if result > 0:
+                logger.info(f"주문 정정 요청: {code} - {order_no} - {quantity}주 - {price:,}원")
+                return result
+            else:
+                logger.error(f"주문 정정 실패: {result}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"주문 정정 오류: {e}")
+            return None
+
+    def get_pending_orders(self):
+        """대기 중인 주문 조회"""
+        return self.pending_orders.copy()
+    
+    def get_order_status(self, order_no):
+        """특정 주문 상태 조회"""
+        if order_no in self.pending_orders:
+            return self.pending_orders[order_no]
+        elif order_no in self.order_history:
+            return self.order_history[order_no]
+        else:
+            return None
+
+    def cancel_all_orders(self, account):
+        """모든 대기 중인 주문 취소"""
+        cancelled_count = 0
+        for order_no, order_info in self.pending_orders.items():
+            if order_info['account'] == account:
+                result = self.cancel_order(account, order_no, order_info['code'], order_info['quantity'])
+                if result:
+                    cancelled_count += 1
+        
+        logger.info(f"전체 주문 취소 완료: {cancelled_count}건")
+        return cancelled_count
     
     def get_position_info(self, account):
         """보유 종목 조회"""
