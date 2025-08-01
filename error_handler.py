@@ -150,8 +150,8 @@ def handle_error(error_type, message, exception=None, error_level=ErrorLevel.ERR
     if error_level == ErrorLevel.CRITICAL:
         _send_critical_alert(error_info)
     
-    # 자동 복구 시도
-    if retry_count < max_retries:
+    # 자동 복구 시도 (테스트 환경에서는 비활성화)
+    if retry_count < max_retries and not os.environ.get('DISABLE_AUTO_RECOVERY'):
         return _attempt_auto_recovery(error_info)
     
     return False
