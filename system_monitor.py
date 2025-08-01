@@ -116,7 +116,10 @@ class SystemMonitor:
         
         # 백그라운드 모니터링 스레드
         self.monitor_thread = None
-        self.start_background_monitoring()
+        
+        # 테스트 환경에서는 백그라운드 모니터링 비활성화
+        if not os.environ.get('DISABLE_BACKGROUND_MONITORING'):
+            self.start_background_monitoring()
     
     def start_background_monitoring(self):
         """백그라운드 모니터링 시작"""
