@@ -172,6 +172,33 @@ fix_ocx_registration.bat
 - [OCX 오류 해결 가이드](KIWOOM_OCX_ERROR_FIX.md)
 - [키움 API 설정 가이드](KIWOOM_API_SETUP_GUIDE.md)
 
+### 기타 일반적인 문제들
+
+#### 1. Python 패키지 설치 오류
+```bash
+# PyQt5 설치 오류 시
+pip install --upgrade pip
+pip install PyQt5==5.15.9
+
+# 기타 의존성 패키지
+pip install -r requirements.txt
+```
+
+#### 2. 키움 API 연결 실패
+- 키움증권 계정으로 로그인 확인
+- Open API+ 사용 신청 승인 상태 확인
+- 방화벽에서 키움 API 접근 허용
+
+#### 3. 실시간 데이터 수신 오류
+- 네트워크 연결 상태 확인
+- 키움 API 서버 상태 확인
+- 장 시간 내에 실행하는지 확인
+
+#### 4. 주문 실행 실패
+- 계좌 잔고 확인
+- 주문 가능 시간 확인 (장 시간)
+- 종목코드 정확성 확인
+
 ## 🔧 고급 설정
 
 ### 로그 설정
