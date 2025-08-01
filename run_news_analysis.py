@@ -256,7 +256,44 @@ def main():
     if args.test:
         # 테스트 모드
         print("🧪 테스트 모드 실행")
-        system.run_full_analysis(["삼성전자", "SK하이닉스"])
+        # 테스트용 더미 뉴스 데이터로 분석
+        from news_collector import NewsItem
+        
+        test_news = [
+            NewsItem(
+                title="삼성전자 실적 개선으로 주가 상승",
+                description="삼성전자가 좋은 실적을 보여주고 있어 주가가 상승하고 있습니다.",
+                link="http://example.com/1",
+                pub_date="2024-01-01",
+                source="test",
+                keywords=["삼성전자", "실적", "상승"],
+                related_stocks=["005930"]
+            ),
+            NewsItem(
+                title="SK하이닉스 신기술 개발 성공",
+                description="SK하이닉스가 새로운 반도체 기술을 개발했습니다.",
+                link="http://example.com/2",
+                pub_date="2024-01-01",
+                source="test",
+                keywords=["SK하이닉스", "신기술", "반도체"],
+                related_stocks=["000660"]
+            ),
+            NewsItem(
+                title="네이버 실적 부진으로 주가 하락",
+                description="네이버의 실적이 예상보다 부진하여 주가가 하락했습니다.",
+                link="http://example.com/3",
+                pub_date="2024-01-01",
+                source="test",
+                keywords=["네이버", "실적", "하락"],
+                related_stocks=["035420"]
+            )
+        ]
+        
+        # 뉴스 분석만 실행
+        stock_analysis = system.analyze_news(test_news)
+        if stock_analysis:
+            system.save_results(test_news, stock_analysis)
+            system.print_summary(test_news, stock_analysis)
     else:
         # 실제 실행
         if not system.initialize_collector():
