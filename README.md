@@ -190,4 +190,4 @@ def backtest_strategy(strategy, historical_data):
 
 ---
 
-**⚠️ 투자에 따른 손실은 본인의 책임입니다. 신중하게 투자하시기 바랍니다.** 
+**⚠️ 투자에 따른 손실은 본인의 책임입니다. 신중하게 투자하시기 바랍니다.** # Test sync Sat Aug  2 01:24:07 KST 2025
