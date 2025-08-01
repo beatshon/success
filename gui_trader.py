@@ -5,6 +5,8 @@ PyQt5를 사용한 사용자 친화적인 인터페이스
 
 import sys
 import time
+import base64
+import hashlib
 from datetime import datetime
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import *
@@ -16,6 +18,97 @@ from kiwoom_api import KiwoomAPI
 from trading_strategy import MovingAverageStrategy, RSIStrategy, BollingerBandsStrategy
 from auto_trader import AutoTrader
 
+class PasswordManager:
+    """비밀번호 관리 클래스"""
+    
+    @staticmethod
+    def encrypt_password(password):
+        """비밀번호 암호화"""
+        if not password:
+            return ""
+        # 간단한 base64 인코딩 (실제 운영에서는 더 강력한 암호화 사용 권장)
+        return base64.b64encode(password.encode()).decode()
+    
+    @staticmethod
+    def decrypt_password(encrypted_password):
+        """비밀번호 복호화"""
+        if not encrypted_password:
+            return ""
+        try:
+            return base64.b64decode(encrypted_password.encode()).decode()
+        except:
+            return ""
+
+class PasswordDialog(QDialog):
+    """비밀번호 입력 다이얼로그"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.password = ""
+        self.init_ui()
+        
+    def init_ui(self):
+        self.setWindowTitle("비밀번호 입력")
+        self.setFixedSize(350, 200)
+        
+        layout = QVBoxLayout()
+        
+        # 안내 메시지
+        label = QLabel("계좌 비밀번호를 입력하세요:")
+        label.setStyleSheet("font-weight: bold; margin-bottom: 10px;")
+        layout.addWidget(label)
+        
+        # 보안 안내 메시지
+        security_label = QLabel("※ 비밀번호는 암호화되어 저장되며, 프로그램 종료 시 삭제됩니다.")
+        security_label.setStyleSheet("color: gray; font-size: 10px; margin-bottom: 10px;")
+        layout.addWidget(security_label)
+        
+        # 비밀번호 입력 필드
+        self.password_edit = QLineEdit()
+        self.password_edit.setEchoMode(QLineEdit.Password)
+        self.password_edit.setPlaceholderText("계좌 비밀번호 입력")
+        self.password_edit.returnPressed.connect(self.accept)
+        layout.addWidget(self.password_edit)
+        
+        # 비밀번호 표시/숨김 토글
+        show_password_layout = QHBoxLayout()
+        self.show_password_cb = QCheckBox("비밀번호 표시")
+        self.show_password_cb.toggled.connect(self.toggle_password_visibility)
+        show_password_layout.addWidget(self.show_password_cb)
+        show_password_layout.addStretch()
+        layout.addLayout(show_password_layout)
+        
+        # 버튼
+        button_layout = QHBoxLayout()
+        
+        ok_btn = QPushButton("확인")
+        ok_btn.clicked.connect(self.accept)
+        ok_btn.setDefault(True)
+        button_layout.addWidget(ok_btn)
+        
+        cancel_btn = QPushButton("취소")
+        cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(cancel_btn)
+        
+        layout.addLayout(button_layout)
+        self.setLayout(layout)
+        
+    def get_password(self):
+        """비밀번호 반환"""
+        return self.password_edit.text()
+        
+    def toggle_password_visibility(self, checked):
+        """비밀번호 표시/숨김 토글"""
+        if checked:
+            self.password_edit.setEchoMode(QLineEdit.Normal)
+        else:
+            self.password_edit.setEchoMode(QLineEdit.Password)
+    
+    def accept(self):
+        """확인 버튼 클릭 시"""
+        self.password = self.password_edit.text()
+        super().accept()
+
 class TradingGUI(QMainWindow):
     """자동매매 GUI 클래스"""
     
@@ -23,7 +116,11 @@ class TradingGUI(QMainWindow):
         super().__init__()
         self.trader = None
         self.api = None
+        self.account_passwords = {}  # 계좌별 비밀번호 저장
         self.init_ui()
+        
+        # 프로그램 종료 시 비밀번호 삭제
+        self.closeEvent = self.on_close_event
         
     def init_ui(self):
         """UI 초기화"""
@@ -65,6 +162,14 @@ class TradingGUI(QMainWindow):
         
         self.login_status_label = QLabel("로그인 상태: 미로그인")
         login_layout.addWidget(self.login_status_label)
+        
+        # 예수금 조회 버튼
+        self.deposit_btn = QPushButton("예수금 조회")
+        self.deposit_btn.clicked.connect(self.check_deposit)
+        self.deposit_btn.setEnabled(False)
+        self.deposit_btn.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.deposit_btn.customContextMenuRequested.connect(self.show_deposit_context_menu)
+        login_layout.addWidget(self.deposit_btn)
         
         login_group.setLayout(login_layout)
         layout.addWidget(login_group)
@@ -275,6 +380,7 @@ class TradingGUI(QMainWindow):
         if success:
             self.login_status_label.setText("로그인 상태: 로그인됨")
             self.start_btn.setEnabled(True)
+            self.deposit_btn.setEnabled(True)
             self.statusBar().showMessage('로그인 성공')
             self.log_message("로그인 성공")
             
@@ -325,6 +431,103 @@ class TradingGUI(QMainWindow):
                     break
         except Exception as e:
             self.log_message(f"실시간 데이터 GUI 업데이트 오류: {e}")
+    
+    def check_deposit(self):
+        """예수금 조회"""
+        try:
+            if not self.api:
+                QMessageBox.warning(self, "경고", "먼저 로그인하세요.")
+                return
+            
+            # 계좌 정보 가져오기
+            account_info = self.api.get_account_info()
+            if not account_info:
+                QMessageBox.warning(self, "경고", "계좌 정보를 가져올 수 없습니다.")
+                return
+            
+            # 첫 번째 계좌 사용
+            account = list(account_info.keys())[0]
+            
+            # 비밀번호 입력 다이얼로그 표시
+            if account not in self.account_passwords:
+                dialog = PasswordDialog(self)
+                if dialog.exec_() == QDialog.Accepted:
+                    password = dialog.get_password()
+                    if password:
+                        # 비밀번호 암호화하여 저장
+                        encrypted_password = PasswordManager.encrypt_password(password)
+                        self.account_passwords[account] = encrypted_password
+                    else:
+                        QMessageBox.warning(self, "경고", "비밀번호를 입력하세요.")
+                        return
+                else:
+                    return
+            else:
+                # 저장된 암호화된 비밀번호 복호화
+                encrypted_password = self.account_passwords[account]
+                password = PasswordManager.decrypt_password(encrypted_password)
+            
+            # 예수금 조회
+            deposit_info = self.api.get_deposit_info_with_password(account, password)
+            if deposit_info:
+                msg = f"계좌: {account}\n"
+                msg += f"예수금: {deposit_info.get('deposit', 0):,}원\n"
+                msg += f"출금가능금액: {deposit_info.get('available_deposit', 0):,}원\n"
+                msg += f"주문가능금액: {deposit_info.get('orderable_amount', 0):,}원"
+                
+                QMessageBox.information(self, "예수금 정보", msg)
+                self.log_message(f"예수금 조회 완료: {account}")
+            else:
+                QMessageBox.warning(self, "경고", "예수금 조회에 실패했습니다.")
+                
+        except Exception as e:
+            self.log_message(f"예수금 조회 오류: {e}")
+            QMessageBox.critical(self, "오류", f"예수금 조회 중 오류가 발생했습니다: {e}")
+    
+    def show_deposit_context_menu(self, position):
+        """예수금 조회 버튼 우클릭 메뉴"""
+        if not self.api:
+            return
+            
+        menu = QMenu()
+        
+        # 계좌 정보 가져오기
+        account_info = self.api.get_account_info()
+        if account_info:
+            account = list(account_info.keys())[0]
+            
+            # 비밀번호 재설정 메뉴
+            reset_action = menu.addAction("비밀번호 재설정")
+            reset_action.triggered.connect(lambda: self.reset_account_password(account))
+            
+            # 저장된 비밀번호 삭제 메뉴
+            if account in self.account_passwords:
+                clear_action = menu.addAction("저장된 비밀번호 삭제")
+                clear_action.triggered.connect(lambda: self.clear_account_password(account))
+        
+        menu.exec_(self.deposit_btn.mapToGlobal(position))
+    
+    def reset_account_password(self, account):
+        """계좌 비밀번호 재설정"""
+        dialog = PasswordDialog(self)
+        dialog.setWindowTitle(f"계좌 {account} 비밀번호 재설정")
+        if dialog.exec_() == QDialog.Accepted:
+            password = dialog.get_password()
+            if password:
+                # 비밀번호 암호화하여 저장
+                encrypted_password = PasswordManager.encrypt_password(password)
+                self.account_passwords[account] = encrypted_password
+                self.log_message(f"계좌 {account} 비밀번호 재설정 완료")
+                QMessageBox.information(self, "완료", "비밀번호가 재설정되었습니다.")
+            else:
+                QMessageBox.warning(self, "경고", "비밀번호를 입력하세요.")
+    
+    def clear_account_password(self, account):
+        """저장된 계좌 비밀번호 삭제"""
+        if account in self.account_passwords:
+            del self.account_passwords[account]
+            self.log_message(f"계좌 {account} 저장된 비밀번호 삭제")
+            QMessageBox.information(self, "완료", "저장된 비밀번호가 삭제되었습니다.")
     
     def on_order_complete(self, order_info):
         """주문 완료 콜백"""
@@ -544,6 +747,19 @@ class TradingGUI(QMainWindow):
         self.buy_trades_label.setText(f"매수: {summary['buy_trades']}")
         self.sell_trades_label.setText(f"매도: {summary['sell_trades']}")
         self.positions_label.setText(f"보유종목: {summary['current_positions']}")
+    
+    def on_close_event(self, event):
+        """프로그램 종료 시 처리"""
+        # 자동매매 중지
+        if self.trader and hasattr(self.trader, 'is_running') and self.trader.is_running():
+            self.stop_trading()
+        
+        # 저장된 비밀번호 삭제
+        self.account_passwords.clear()
+        self.log_message("저장된 비밀번호가 삭제되었습니다.")
+        
+        # 프로그램 종료
+        event.accept()
     
     def log_message(self, message):
         """로그 메시지 추가"""

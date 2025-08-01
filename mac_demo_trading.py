@@ -30,6 +30,7 @@ class MacDemoTrader:
         
         self.positions = {}  # 보유 종목
         self.trade_history = []
+        self.start_time = time.time()  # 시작 시간 기록
         
         # 시뮬레이션된 종목 데이터
         self.demo_stocks = {

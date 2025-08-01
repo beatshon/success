@@ -138,14 +138,18 @@ class KiwoomAPI(QAxWidget):
             return {}
     
     def get_deposit_info(self, account):
-        """예수금 조회"""
+        """예수금 조회 (기본 메서드 - 비밀번호 없음)"""
+        return self.get_deposit_info_with_password(account, "")
+    
+    def get_deposit_info_with_password(self, account, password):
+        """예수금 조회 (비밀번호 포함)"""
         try:
             self.tr_request_no += 1
             request_no = str(self.tr_request_no)
             
             # TR 요청
             self.dynamicCall("SetInputValue(QString, QString)", "계좌번호", account)
-            self.dynamicCall("SetInputValue(QString, QString)", "비밀번호", "")
+            self.dynamicCall("SetInputValue(QString, QString)", "비밀번호", password)
             self.dynamicCall("SetInputValue(QString, QString)", "비밀번호입력매체구분", "00")
             self.dynamicCall("SetInputValue(QString, QString)", "조회구분", "2")
             
