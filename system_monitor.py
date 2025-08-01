@@ -143,8 +143,12 @@ class SystemMonitor:
     def _collect_system_metrics(self):
         """시스템 메트릭 수집"""
         try:
-            # CPU 사용률
-            cpu_percent = psutil.cpu_percent(interval=1)
+            # 테스트 환경에서는 빠른 CPU 측정
+            if os.environ.get('DISABLE_BACKGROUND_MONITORING'):
+                cpu_percent = psutil.cpu_percent(interval=0.1)  # 0.1초만 대기
+            else:
+                cpu_percent = psutil.cpu_percent(interval=1)
+                
             self.system_stats['cpu_usage'].append({
                 'timestamp': datetime.now(),
                 'value': cpu_percent
