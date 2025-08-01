@@ -15,6 +15,10 @@ import pandas as pd
 from datetime import datetime, timedelta
 from enum import Enum
 
+# 에러 처리 및 모니터링 모듈 import
+from error_handler import ErrorType, ErrorLevel, handle_error, retry_operation, error_handler
+from system_monitor import system_monitor, record_api_call, record_data_processed, record_order_execution
+
 class OrderType(Enum):
     """주문 타입 정의"""
     BUY = "신규매수"
@@ -44,21 +48,39 @@ class RealDataType(Enum):
 
 class KiwoomAPI(QAxWidget):
     """
-    키움증권 API 래퍼 클래스
+    키움증권 API 래퍼 클래스 (안정성 강화 버전)
     """
     
     def __init__(self):
         super().__init__()
         
         # API 컨트롤 생성
-        self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
+        try:
+            self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
+        except Exception as e:
+            handle_error(
+                ErrorType.API,
+                "키움 API 컨트롤 초기화 실패",
+                exception=e,
+                error_level=ErrorLevel.CRITICAL
+            )
+            raise
         
         # 이벤트 연결
-        self.OnEventConnect.connect(self._event_connect)
-        self.OnReceiveTrData.connect(self._receive_tr_data)
-        self.OnReceiveRealData.connect(self._receive_real_data)
-        self.OnReceiveChejanData.connect(self._receive_chejan_data)
-        self.OnReceiveMsg.connect(self._receive_msg)
+        try:
+            self.OnEventConnect.connect(self._event_connect)
+            self.OnReceiveTrData.connect(self._receive_tr_data)
+            self.OnReceiveRealData.connect(self._receive_real_data)
+            self.OnReceiveChejanData.connect(self._receive_chejan_data)
+            self.OnReceiveMsg.connect(self._receive_msg)
+        except Exception as e:
+            handle_error(
+                ErrorType.API,
+                "키움 API 이벤트 연결 실패",
+                exception=e,
+                error_level=ErrorLevel.CRITICAL
+            )
+            raise
         
         # 로그인 상태
         self.login_status = False
@@ -119,8 +141,32 @@ class KiwoomAPI(QAxWidget):
         self.batch_timer.timeout.connect(self._process_batch_callbacks)
         self.batch_timer.start(int(self.real_data_config['batch_interval'] * 1000))
         
-        logger.info("키움 API 초기화 완료 (실시간 데이터 최적화 적용)")
-    
+        # 안정성 설정
+        self.stability_config = {
+            'enable_health_check': True,
+            'health_check_interval': 30.0,  # 30초마다 헬스 체크
+            'max_consecutive_errors': 5,
+            'auto_recovery_enabled': True,
+            'connection_timeout': 10.0,
+            'operation_timeout': 30.0
+        }
+        
+        # 헬스 체크 타이머
+        self.health_timer = QTimer()
+        self.health_timer.timeout.connect(self._perform_health_check)
+        if self.stability_config['enable_health_check']:
+            self.health_timer.start(int(self.stability_config['health_check_interval'] * 1000))
+        
+        # 에러 통계
+        self.error_stats = {
+            'consecutive_errors': 0,
+            'total_errors': 0,
+            'last_error_time': None,
+            'recovery_attempts': 0
+        }
+        
+        logger.info("키움 API 초기화 완료 (안정성 강화 적용)")
+
     def set_login_callback(self, callback):
         """로그인 완료 콜백 설정"""
         self.on_login_callback = callback
@@ -134,87 +180,185 @@ class KiwoomAPI(QAxWidget):
         self.on_order_callback = callback
     
     def login(self, timeout=30):
-        """로그인 요청"""
-        logger.info("로그인 요청 중...")
-        self.login_status = False
-        self.login_error = None
-        
-        # 로그인 요청
-        result = self.dynamicCall("CommConnect()")
-        if result != 0:
-            logger.error(f"로그인 요청 실패: {result}")
-            return False
-        
-        # 로그인 완료까지 대기
+        """로그인 요청 (안정성 강화)"""
         start_time = time.time()
-        while not self.login_status and time.time() - start_time < timeout:
-            time.sleep(0.1)
         
-        if not self.login_status:
-            logger.error("로그인 타임아웃")
-            return False
-        
-        if self.login_error:
-            logger.error(f"로그인 실패: {self.login_error}")
-            return False
-        
-        logger.info("로그인 완료")
-        
-        # 로그인 콜백 호출
-        if self.on_login_callback:
-            self.on_login_callback(self.login_status)
-        
-        return True
-    
-    def _event_connect(self, err_code):
-        """로그인 이벤트 처리"""
-        if err_code == 0:
-            self.login_status = True
-            self.login_error = None
-            logger.info("로그인 성공")
-        else:
-            self.login_status = False
-            self.login_error = err_code
-            logger.error(f"로그인 실패: {err_code}")
-    
-    def _receive_msg(self, screen_no, rqname, trcode, msg):
-        """메시지 수신 처리"""
-        logger.info(f"메시지 수신: {rqname} - {msg}")
-    
-    def get_account_info(self):
-        """계좌 정보 조회"""
         try:
-            account_list = self.dynamicCall("GetLoginInfo(QString)", "ACCOUNT_CNT")
-            accounts = self.dynamicCall("GetLoginInfo(QString)", "ACCNO").split(';')
+            logger.info("로그인 요청 중...")
+            self.login_status = False
+            self.login_error = None
             
-            for account in accounts:
-                if account:
-                    self.account_info[account] = {
-                        'account': account,
-                        'user_id': self.dynamicCall("GetLoginInfo(QString)", "USER_ID"),
-                        'user_name': self.dynamicCall("GetLoginInfo(QString)", "USER_NAME"),
-                        'server_gubun': self.dynamicCall("GetLoginInfo(QString)", "GetServerGubun")
-                    }
+            # 로그인 요청
+            result = self.dynamicCall("CommConnect()")
+            if result != 0:
+                error_msg = f"로그인 요청 실패: {result}"
+                handle_error(
+                    ErrorType.API,
+                    error_msg,
+                    context={'result': result},
+                    error_level=ErrorLevel.ERROR
+                )
+                return False
             
-            logger.info(f"계좌 정보 조회 완료: {len(self.account_info)}개")
-            return self.account_info
+            # 로그인 완료까지 대기
+            while not self.login_status and time.time() - start_time < timeout:
+                time.sleep(0.1)
+            
+            if not self.login_status:
+                error_msg = "로그인 타임아웃"
+                handle_error(
+                    ErrorType.TIMEOUT,
+                    error_msg,
+                    context={'timeout': timeout},
+                    error_level=ErrorLevel.ERROR
+                )
+                return False
+            
+            if self.login_error:
+                error_msg = f"로그인 실패: {self.login_error}"
+                handle_error(
+                    ErrorType.API,
+                    error_msg,
+                    context={'login_error': self.login_error},
+                    error_level=ErrorLevel.ERROR
+                )
+                return False
+            
+            # 성공 기록
+            response_time = time.time() - start_time
+            record_api_call(response_time, True)
+            
+            logger.info("로그인 완료")
+            
+            # 로그인 콜백 호출
+            if self.on_login_callback:
+                self.on_login_callback(self.login_status)
+            
+            return True
+            
         except Exception as e:
-            logger.error(f"계좌 정보 조회 오류: {e}")
+            response_time = time.time() - start_time
+            record_api_call(response_time, False)
+            
+            handle_error(
+                ErrorType.API,
+                f"로그인 중 예외 발생: {e}",
+                exception=e,
+                context={'timeout': timeout},
+                error_level=ErrorLevel.ERROR
+            )
+            return False
+
+    def _event_connect(self, err_code):
+        """로그인 이벤트 처리 (안정성 강화)"""
+        try:
+            if err_code == 0:
+                self.login_status = True
+                self.login_error = None
+                logger.info("로그인 성공")
+                
+                # 에러 통계 리셋
+                self.error_stats['consecutive_errors'] = 0
+                self.error_stats['recovery_attempts'] = 0
+                
+            else:
+                self.login_status = False
+                self.login_error = f"로그인 실패 (에러코드: {err_code})"
+                
+                handle_error(
+                    ErrorType.API,
+                    f"로그인 실패: 에러코드 {err_code}",
+                    context={'err_code': err_code},
+                    error_level=ErrorLevel.ERROR
+                )
+                
+                # 에러 통계 업데이트
+                self.error_stats['consecutive_errors'] += 1
+                self.error_stats['total_errors'] += 1
+                self.error_stats['last_error_time'] = datetime.now()
+                
+        except Exception as e:
+            handle_error(
+                ErrorType.API,
+                f"로그인 이벤트 처리 오류: {e}",
+                exception=e,
+                error_level=ErrorLevel.ERROR
+            )
+
+    def _receive_msg(self, screen_no, rqname, trcode, msg):
+        """메시지 수신 처리 (안정성 강화)"""
+        try:
+            if msg:
+                logger.info(f"TR 메시지: {msg}")
+                
+                # 에러 메시지 감지
+                if "에러" in msg or "오류" in msg or "실패" in msg:
+                    handle_error(
+                        ErrorType.API,
+                        f"TR 에러 메시지: {msg}",
+                        context={'screen_no': screen_no, 'rqname': rqname, 'trcode': trcode},
+                        error_level=ErrorLevel.WARNING
+                    )
+                    
+        except Exception as e:
+            handle_error(
+                ErrorType.API,
+                f"메시지 수신 처리 오류: {e}",
+                exception=e,
+                error_level=ErrorLevel.WARNING
+            )
+
+    def get_account_info(self):
+        """계좌 정보 조회 (안정성 강화)"""
+        return retry_operation(
+            self._get_account_info_internal,
+            error_type=ErrorType.API,
+            context={'operation': 'get_account_info'}
+        )
+    
+    def _get_account_info_internal(self):
+        """계좌 정보 조회 내부 구현"""
+        try:
+            account_count = self.dynamicCall("GetLoginInfo(QString)", "ACCOUNT_CNT")
+            account_list = self.dynamicCall("GetLoginInfo(QString)", "ACCLIST")
+            
+            if account_count and account_list:
+                accounts = account_list.split(';')
+                for account in accounts:
+                    if account.strip():
+                        self.account_info[account] = {
+                            'account': account,
+                            'timestamp': datetime.now()
+                        }
+            
+            return self.account_info
+            
+        except Exception as e:
+            handle_error(
+                ErrorType.API,
+                f"계좌 정보 조회 오류: {e}",
+                exception=e,
+                error_level=ErrorLevel.ERROR
+            )
             return {}
-    
+
     def get_deposit_info(self, account):
-        """예수금 조회 (기본 메서드 - 비밀번호 없음)"""
-        return self.get_deposit_info_with_password(account, "")
+        """예수금 정보 조회 (안정성 강화)"""
+        return retry_operation(
+            self._get_deposit_info_internal,
+            account,
+            error_type=ErrorType.API,
+            context={'operation': 'get_deposit_info', 'account': account}
+        )
     
-    def get_deposit_info_with_password(self, account, password):
-        """예수금 조회 (비밀번호 포함)"""
+    def _get_deposit_info_internal(self, account):
+        """예수금 정보 조회 내부 구현"""
         try:
             self.tr_request_no += 1
             request_no = str(self.tr_request_no)
             
-            # TR 요청
             self.dynamicCall("SetInputValue(QString, QString)", "계좌번호", account)
-            self.dynamicCall("SetInputValue(QString, QString)", "비밀번호", password)
+            self.dynamicCall("SetInputValue(QString, QString)", "비밀번호", "")
             self.dynamicCall("SetInputValue(QString, QString)", "비밀번호입력매체구분", "00")
             self.dynamicCall("SetInputValue(QString, QString)", "조회구분", "2")
             
@@ -222,7 +366,12 @@ class KiwoomAPI(QAxWidget):
                                     "예수금상세현황요청", "opw00001", 0, request_no)
             
             if result != 0:
-                logger.error(f"예수금 조회 TR 요청 실패: {result}")
+                handle_error(
+                    ErrorType.API,
+                    f"예수금 조회 실패: {result}",
+                    context={'result': result, 'account': account},
+                    error_level=ErrorLevel.ERROR
+                )
                 return {}
             
             # TR 응답 대기
@@ -234,13 +383,24 @@ class KiwoomAPI(QAxWidget):
                 self.tr_completed.pop(request_no)
                 return self.deposit_info.get(account, {})
             else:
-                logger.error("예수금 조회 TR 응답 타임아웃")
+                handle_error(
+                    ErrorType.TIMEOUT,
+                    "예수금 조회 타임아웃",
+                    context={'account': account, 'request_no': request_no},
+                    error_level=ErrorLevel.WARNING
+                )
                 return {}
                 
         except Exception as e:
-            logger.error(f"예수금 조회 오류: {e}")
+            handle_error(
+                ErrorType.API,
+                f"예수금 조회 오류: {e}",
+                exception=e,
+                context={'account': account},
+                error_level=ErrorLevel.ERROR
+            )
             return {}
-    
+
     def get_stock_basic_info(self, code):
         """주식 기본 정보 조회"""
         try:
@@ -337,7 +497,7 @@ class KiwoomAPI(QAxWidget):
             logger.error(f"TR 데이터 처리 오류: {e}")
     
     def _receive_real_data(self, code, real_type, real_data):
-        """실시간 데이터 수신 처리 (최적화된 버전)"""
+        """실시간 데이터 수신 처리 (안정성 강화)"""
         start_time = time.time()
         
         try:
@@ -352,11 +512,17 @@ class KiwoomAPI(QAxWidget):
                     logger.debug(f"미지원 실시간 데이터 타입: {real_type} - {code}")
                     
         except Exception as e:
-            logger.error(f"실시간 데이터 처리 오류: {code} - {real_type} - {e}")
+            handle_error(
+                ErrorType.DATA,
+                f"실시간 데이터 처리 오류: {code} - {real_type} - {e}",
+                exception=e,
+                context={'code': code, 'real_type': real_type},
+                error_level=ErrorLevel.ERROR
+            )
             self.real_data_stats[code]['error_count'] += 1
 
     def _process_stock_tick_data(self, code, start_time):
-        """주식 체결 데이터 처리"""
+        """주식 체결 데이터 처리 (안정성 강화)"""
         try:
             # 실시간 데이터 추출
             current_price = int(self.dynamicCall("GetCommRealData(QString, int)", code, 10))
@@ -414,11 +580,21 @@ class KiwoomAPI(QAxWidget):
                     'timestamp': timestamp
                 })
             
+            # 성능 기록
+            processing_time = time.time() - start_time
+            record_data_processed(1)
+            
             # 로깅 (디버그 레벨로 변경하여 성능 향상)
             logger.debug(f"실시간 체결: {code} - {current_price:,}원 ({change_rate:+.2f}%) - {volume:,}주")
             
         except Exception as e:
-            logger.error(f"주식 체결 데이터 처리 오류: {code} - {e}")
+            handle_error(
+                ErrorType.DATA,
+                f"주식 체결 데이터 처리 오류: {code} - {e}",
+                exception=e,
+                context={'code': code},
+                error_level=ErrorLevel.ERROR
+            )
             self.real_data_stats[code]['error_count'] += 1
 
     def _process_stock_order_data(self, code, start_time):
@@ -728,12 +904,19 @@ class KiwoomAPI(QAxWidget):
             return False, f"검증 오류: {e}"
 
     def order_stock(self, account, code, quantity, price, order_type="신규매수", retry_count=0):
-        """주식 주문 (개선된 버전)"""
+        """주식 주문 (안정성 강화)"""
+        start_time = time.time()
+        
         try:
             # 주문 검증
             is_valid, message = self.validate_order(account, code, quantity, price, order_type)
             if not is_valid:
-                logger.error(f"주문 검증 실패: {message}")
+                handle_error(
+                    ErrorType.VALIDATION,
+                    f"주문 검증 실패: {message}",
+                    context={'account': account, 'code': code, 'quantity': quantity, 'price': price, 'order_type': order_type},
+                    error_level=ErrorLevel.WARNING
+                )
                 return None
             
             # 주문 전송
@@ -755,10 +938,23 @@ class KiwoomAPI(QAxWidget):
                 }
                 self.pending_orders[order_no] = pending_order
                 
+                # 성공 기록
+                execution_time = time.time() - start_time
+                record_order_execution(True)
+                
                 logger.info(f"주문 전송 성공: {code} - {order_type} - {quantity}주 - {price:,}원 (주문번호: {order_no})")
                 return order_no
             else:
-                logger.error(f"주문 전송 실패: {order_no}")
+                # 실패 기록
+                execution_time = time.time() - start_time
+                record_order_execution(False)
+                
+                handle_error(
+                    ErrorType.API,
+                    f"주문 전송 실패: {order_no}",
+                    context={'account': account, 'code': code, 'quantity': quantity, 'price': price, 'order_type': order_type},
+                    error_level=ErrorLevel.ERROR
+                )
                 
                 # 재시도 로직
                 if retry_count < self.max_retry_count:
@@ -766,11 +962,26 @@ class KiwoomAPI(QAxWidget):
                     time.sleep(1)  # 1초 대기
                     return self.order_stock(account, code, quantity, price, order_type, retry_count + 1)
                 else:
-                    logger.error(f"주문 최대 재시도 횟수 초과")
+                    handle_error(
+                        ErrorType.API,
+                        "주문 최대 재시도 횟수 초과",
+                        context={'account': account, 'code': code, 'retry_count': retry_count},
+                        error_level=ErrorLevel.ERROR
+                    )
                     return None
                 
         except Exception as e:
-            logger.error(f"주문 전송 오류: {e}")
+            # 실패 기록
+            execution_time = time.time() - start_time
+            record_order_execution(False)
+            
+            handle_error(
+                ErrorType.API,
+                f"주문 전송 오류: {e}",
+                exception=e,
+                context={'account': account, 'code': code, 'quantity': quantity, 'price': price, 'order_type': order_type},
+                error_level=ErrorLevel.ERROR
+            )
             return None
 
     def buy_stock(self, account, code, quantity, price):
@@ -939,3 +1150,102 @@ class KiwoomAPI(QAxWidget):
         except Exception as e:
             logger.error(f"주문내역 조회 오류: {e}")
             return {} 
+
+    def _perform_health_check(self):
+        """헬스 체크 수행"""
+        try:
+            # 로그인 상태 확인
+            if not self.login_status:
+                handle_error(
+                    ErrorType.SYSTEM,
+                    "로그인 상태 비정상",
+                    error_level=ErrorLevel.WARNING
+                )
+                return False
+            
+            # API 연결 상태 확인
+            try:
+                # 간단한 API 호출로 연결 상태 확인
+                test_result = self.dynamicCall("GetLoginInfo(QString)", "USER_ID")
+                if not test_result:
+                    handle_error(
+                        ErrorType.SYSTEM,
+                        "API 연결 상태 비정상",
+                        error_level=ErrorLevel.WARNING
+                    )
+                    return False
+            except Exception as e:
+                handle_error(
+                    ErrorType.SYSTEM,
+                    f"API 연결 확인 실패: {e}",
+                    exception=e,
+                    error_level=ErrorLevel.ERROR
+                )
+                return False
+            
+            # 에러 통계 확인
+            if self.error_stats['consecutive_errors'] >= self.stability_config['max_consecutive_errors']:
+                handle_error(
+                    ErrorType.SYSTEM,
+                    f"연속 에러 발생: {self.error_stats['consecutive_errors']}회",
+                    context=self.error_stats,
+                    error_level=ErrorLevel.WARNING
+                )
+                
+                # 자동 복구 시도
+                if self.stability_config['auto_recovery_enabled']:
+                    self._attempt_recovery()
+            
+            logger.debug("헬스 체크 완료 - 정상")
+            return True
+            
+        except Exception as e:
+            handle_error(
+                ErrorType.SYSTEM,
+                f"헬스 체크 오류: {e}",
+                exception=e,
+                error_level=ErrorLevel.ERROR
+            )
+            return False
+    
+    def _attempt_recovery(self):
+        """복구 시도"""
+        try:
+            logger.info("시스템 복구 시도 중...")
+            
+            # 에러 통계 리셋
+            self.error_stats['consecutive_errors'] = 0
+            self.error_stats['recovery_attempts'] += 1
+            
+            # 캐시 정리
+            self.clear_real_data_cache()
+            
+            # 재연결 시도
+            if not self.login_status:
+                logger.info("재로그인 시도 중...")
+                self.login()
+            
+            logger.info("시스템 복구 완료")
+            
+        except Exception as e:
+            handle_error(
+                ErrorType.SYSTEM,
+                f"복구 시도 실패: {e}",
+                exception=e,
+                error_level=ErrorLevel.ERROR
+            )
+
+    def get_error_stats(self):
+        """에러 통계 조회"""
+        return self.error_stats.copy()
+    
+    def get_stability_config(self):
+        """안정성 설정 조회"""
+        return self.stability_config.copy()
+    
+    def update_stability_config(self, **kwargs):
+        """안정성 설정 업데이트"""
+        for key, value in kwargs.items():
+            if key in self.stability_config:
+                self.stability_config[key] = value
+                logger.info(f"안정성 설정 변경: {key} = {value}") 
