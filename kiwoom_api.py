@@ -955,7 +955,15 @@ class KiwoomAPI(QAxWidget):
             else:
                 # 실패 기록
                 execution_time = time.time() - start_time
-                record_order_execution(False)
+                record_order_execution(
+                    order_type=order_type,
+                    symbol=code,
+                    quantity=quantity,
+                    price=price,
+                    execution_time=execution_time,
+                    success=False,
+                    error_message=f"주문 전송 실패: {order_no}"
+                )
                 
                 handle_error(
                     ErrorType.API,
@@ -981,7 +989,15 @@ class KiwoomAPI(QAxWidget):
         except Exception as e:
             # 실패 기록
             execution_time = time.time() - start_time
-            record_order_execution(False)
+            record_order_execution(
+                order_type=order_type,
+                symbol=code,
+                quantity=quantity,
+                price=price,
+                execution_time=execution_time,
+                success=False,
+                error_message=str(e)
+            )
             
             handle_error(
                 ErrorType.API,
