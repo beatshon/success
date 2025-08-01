@@ -1,1 +1,36 @@
- 
+# 키움 API 환경 변수 설정 예제
+# 실제 사용 시 이 파일을 .env로 복사하고 실제 값으로 변경하세요
+
+# 키움증권 계정 정보
+KIWOOM_USER_ID=your_user_id_here
+KIWOOM_PASSWORD=your_password_here
+KIWOOM_CERT_PASSWORD=your_cert_password_here
+KIWOOM_ACCOUNT=your_account_number_here
+
+# 키움 API 앱키 (발급받은 실제 값으로 변경)
+KIWOOM_APP_KEY=your_app_key_here
+KIWOOM_APP_SECRET=your_app_secret_here
+KIWOOM_ACCESS_TOKEN=your_access_token_here
+
+# 테스트 모드 설정
+KIWOOM_TEST_MODE=False
+
+# 로깅 설정
+LOG_LEVEL=INFO
+LOG_FILE=logs/kiwoom_api.log
+
+# API 제한 설정
+TR_REQUEST_LIMIT=4
+REAL_DATA_LIMIT=100
+
+# 에러 처리 설정
+ERROR_RETRY_COUNT=3
+ERROR_RETRY_DELAY=1.0
+
+# 성능 설정
+ENABLE_CACHING=True
+CACHE_TTL=1.0
+
+# 백그라운드 모니터링 설정
+DISABLE_BACKGROUND_MONITORING=False
+DISABLE_AUTO_RECOVERY=False 
