@@ -44,6 +44,7 @@ class KiwoomAPI(QAxWidget):
         self.stock_info = {}
         self.order_info = {}
         self.position_info = {}
+        self.deposit_info = {} # 예수금 정보를 저장할 딕셔너리
         
         # 실시간 데이터 구독
         self.real_data_codes = set()
@@ -136,6 +137,41 @@ class KiwoomAPI(QAxWidget):
             logger.error(f"계좌 정보 조회 오류: {e}")
             return {}
     
+    def get_deposit_info(self, account):
+        """예수금 조회"""
+        try:
+            self.tr_request_no += 1
+            request_no = str(self.tr_request_no)
+            
+            # TR 요청
+            self.dynamicCall("SetInputValue(QString, QString)", "계좌번호", account)
+            self.dynamicCall("SetInputValue(QString, QString)", "비밀번호", "")
+            self.dynamicCall("SetInputValue(QString, QString)", "비밀번호입력매체구분", "00")
+            self.dynamicCall("SetInputValue(QString, QString)", "조회구분", "2")
+            
+            result = self.dynamicCall("CommRqData(QString, QString, int, QString)", 
+                                    "예수금상세현황요청", "opw00001", 0, request_no)
+            
+            if result != 0:
+                logger.error(f"예수금 조회 TR 요청 실패: {result}")
+                return {}
+            
+            # TR 응답 대기
+            start_time = time.time()
+            while request_no not in self.tr_completed and time.time() - start_time < 5:
+                time.sleep(0.1)
+            
+            if request_no in self.tr_completed:
+                self.tr_completed.pop(request_no)
+                return self.deposit_info.get(account, {})
+            else:
+                logger.error("예수금 조회 TR 응답 타임아웃")
+                return {}
+                
+        except Exception as e:
+            logger.error(f"예수금 조회 오류: {e}")
+            return {}
+    
     def get_stock_basic_info(self, code):
         """주식 기본 정보 조회"""
         try:
@@ -201,6 +237,29 @@ class KiwoomAPI(QAxWidget):
                 }
                 
                 logger.info(f"주식 정보 수신: {code} - {name} - {current_price:,}원")
+            
+            elif rqname == "예수금상세현황요청":
+                # 예수금 정보 처리
+                deposit = int(self.dynamicCall("GetCommData(QString, QString, int, QString)", 
+                                             trcode, rqname, 0, "예수금").strip())
+                available_deposit = int(self.dynamicCall("GetCommData(QString, QString, int, QString)", 
+                                                       trcode, rqname, 0, "출금가능금액").strip())
+                orderable_amount = int(self.dynamicCall("GetCommData(QString, QString, int, QString)", 
+                                                      trcode, rqname, 0, "주문가능금액").strip())
+                
+                # 계좌번호는 TR 요청 시 사용한 계좌번호를 사용
+                account = self.dynamicCall("GetCommData(QString, QString, int, QString)", 
+                                         trcode, rqname, 0, "계좌번호").strip()
+                
+                self.deposit_info[account] = {
+                    'account': account,
+                    'deposit': deposit,
+                    'available_deposit': available_deposit,
+                    'orderable_amount': orderable_amount,
+                    'timestamp': datetime.now()
+                }
+                
+                logger.info(f"예수금 정보 수신: {account} - 예수금: {deposit:,}원, 출금가능: {available_deposit:,}원, 주문가능: {orderable_amount:,}원")
             
             # TR 완료 표시
             self.tr_completed[str(self.tr_request_no)] = True

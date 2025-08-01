@@ -49,8 +49,11 @@ class AutoTrader:
         self.watch_list = []
         
         # 거래 설정
-        self.trade_amount = 100000  # 10만원
+        self.trade_amount = 100000  # 10만원 (기본값)
         self.max_positions = 5  # 최대 보유 종목 수
+        
+        # 예수금 정보 조회
+        self.update_deposit_info()
         
         # 타이머 설정
         self.timer = QTimer()
@@ -72,6 +75,28 @@ class AutoTrader:
         self.watch_list = [item for item in self.watch_list if item['code'] != code]
         logger.info(f"모니터링 종목 제거: {code}")
     
+    def update_deposit_info(self):
+        """예수금 정보 업데이트"""
+        try:
+            deposit_info = self.api.get_deposit_info(self.account)
+            if deposit_info:
+                self.deposit_info = deposit_info
+                available_amount = deposit_info.get('orderable_amount', 0)
+                
+                # 주문 가능 금액의 10%를 기본 거래 금액으로 설정
+                if available_amount > 0:
+                    self.trade_amount = min(100000, available_amount // 10)
+                
+                logger.info(f"예수금 정보 업데이트: {deposit_info.get('deposit', 0):,}원")
+                logger.info(f"주문가능금액: {available_amount:,}원")
+                logger.info(f"설정된 거래금액: {self.trade_amount:,}원")
+            else:
+                logger.warning("예수금 정보 조회 실패")
+                self.deposit_info = {}
+        except Exception as e:
+            logger.error(f"예수금 정보 업데이트 오류: {e}")
+            self.deposit_info = {}
+    
     def get_current_positions(self):
         """현재 보유 종목 조회"""
         # 실제 구현에서는 API를 통해 보유 종목을 조회해야 함
@@ -87,6 +112,9 @@ class AutoTrader:
         """매매 사이클 실행"""
         try:
             logger.info("매매 사이클 시작")
+            
+            # 예수금 정보 업데이트
+            self.update_deposit_info()
             
             # 현재 보유 종목 확인
             positions = self.get_current_positions()
@@ -108,15 +136,24 @@ class AutoTrader:
                     len(positions) < self.max_positions and
                     self.strategy.should_buy(code, price)):
                     
-                    quantity = self.calculate_order_quantity(price)
-                    self.strategy.execute_trade(code, "매수", quantity, price)
+                    # 예수금 확인
+                    available_amount = self.deposit_info.get('orderable_amount', 0)
+                    required_amount = self.trade_amount
                     
-                    # 보유 종목에 추가
-                    positions[code] = {
-                        'quantity': quantity,
-                        'avg_price': price,
-                        'buy_time': datetime.now()
-                    }
+                    if available_amount >= required_amount:
+                        quantity = self.calculate_order_quantity(price)
+                        self.strategy.execute_trade(code, "매수", quantity, price)
+                        
+                        # 보유 종목에 추가
+                        positions[code] = {
+                            'quantity': quantity,
+                            'avg_price': price,
+                            'buy_time': datetime.now()
+                        }
+                        
+                        logger.info(f"매수 실행: {code} - {quantity}주 @ {price:,}원 (예수금: {available_amount:,}원)")
+                    else:
+                        logger.warning(f"예수금 부족: 필요 {required_amount:,}원, 보유 {available_amount:,}원")
                 
                 # 매도 조건 확인
                 elif (code in positions and 
