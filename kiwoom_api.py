@@ -940,7 +940,15 @@ class KiwoomAPI(QAxWidget):
                 
                 # 성공 기록
                 execution_time = time.time() - start_time
-                record_order_execution(True)
+                record_order_execution(
+                    order_type=order_type,
+                    symbol=code,
+                    quantity=quantity,
+                    price=price,
+                    execution_time=execution_time,
+                    success=True,
+                    order_id=str(order_no)
+                )
                 
                 logger.info(f"주문 전송 성공: {code} - {order_type} - {quantity}주 - {price:,}원 (주문번호: {order_no})")
                 return order_no
