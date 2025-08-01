@@ -5,6 +5,8 @@
 
 import sys
 import time
+import threading
+from collections import defaultdict, deque
 from PyQt5.QAxContainer import *
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
@@ -30,6 +32,15 @@ class OrderStatus(Enum):
     FILLED = "체결"
     CANCELLED = "취소"
     REJECTED = "거부"
+
+class RealDataType(Enum):
+    """실시간 데이터 타입 정의"""
+    STOCK_TICK = "주식체결"
+    STOCK_ORDER = "주식주문체결"
+    STOCK_TRADE = "주식체결통보"
+    INDEX = "지수"
+    FUTURES = "선물"
+    OPTION = "옵션"
 
 class KiwoomAPI(QAxWidget):
     """
@@ -70,15 +81,45 @@ class KiwoomAPI(QAxWidget):
         self.order_history = {}   # 주문 내역
         self.max_retry_count = 3  # 최대 재시도 횟수
         
-        # 실시간 데이터 구독
-        self.real_data_codes = set()
+        # 실시간 데이터 관리 (최적화)
+        self.real_data_codes = set()  # 구독 중인 종목 코드
+        self.real_data_cache = {}     # 실시간 데이터 캐시
+        self.real_data_history = defaultdict(lambda: deque(maxlen=1000))  # 최근 1000개 데이터 보관
+        self.real_data_stats = defaultdict(lambda: {
+            'last_update': None,
+            'update_count': 0,
+            'error_count': 0,
+            'avg_processing_time': 0.0
+        })
+        
+        # 성능 최적화
+        self.data_lock = threading.Lock()  # 데이터 동기화용 락
+        self.callback_queue = deque(maxlen=1000)  # 콜백 큐
+        self.processing_thread = None
+        self.is_processing = False
+        
+        # 실시간 데이터 설정
+        self.real_data_config = {
+            'enable_caching': True,
+            'cache_ttl': 1.0,  # 캐시 유효시간 (초)
+            'max_history_size': 1000,
+            'enable_stats': True,
+            'batch_processing': True,
+            'batch_size': 10,
+            'batch_interval': 0.1  # 배치 처리 간격 (초)
+        }
         
         # 콜백 함수들
         self.on_login_callback = None
         self.on_real_data_callback = None
         self.on_order_callback = None
         
-        logger.info("키움 API 초기화 완료")
+        # 배치 처리 타이머
+        self.batch_timer = QTimer()
+        self.batch_timer.timeout.connect(self._process_batch_callbacks)
+        self.batch_timer.start(int(self.real_data_config['batch_interval'] * 1000))
+        
+        logger.info("키움 API 초기화 완료 (실시간 데이터 최적화 적용)")
     
     def set_login_callback(self, callback):
         """로그인 완료 콜백 설정"""
@@ -296,106 +337,357 @@ class KiwoomAPI(QAxWidget):
             logger.error(f"TR 데이터 처리 오류: {e}")
     
     def _receive_real_data(self, code, real_type, real_data):
-        """실시간 데이터 수신 처리"""
+        """실시간 데이터 수신 처리 (최적화된 버전)"""
+        start_time = time.time()
+        
         try:
-            if real_type == "주식체결":
-                current_price = int(self.dynamicCall("GetCommRealData(QString, int)", code, 10))
-                volume = int(self.dynamicCall("GetCommRealData(QString, int)", code, 15))
-                change = int(self.dynamicCall("GetCommRealData(QString, int)", code, 12))
-                change_rate = float(self.dynamicCall("GetCommRealData(QString, int)", code, 13))
-                
-                if code in self.stock_info:
-                    self.stock_info[code].update({
-                        'current_price': current_price,
-                        'volume': volume,
-                        'change': change,
-                        'change_rate': change_rate,
-                        'timestamp': datetime.now()
-                    })
-                
-                # 실시간 데이터 콜백 호출
-                if self.on_real_data_callback:
-                    self.on_real_data_callback(code, {
-                        'current_price': current_price,
-                        'volume': volume,
-                        'change': change,
-                        'change_rate': change_rate
-                    })
-                
-                logger.debug(f"실시간 데이터: {code} - {current_price:,}원 ({change_rate:+.2f}%)")
-                
+            with self.data_lock:
+                if real_type == "주식체결":
+                    self._process_stock_tick_data(code, start_time)
+                elif real_type == "주식주문체결":
+                    self._process_stock_order_data(code, start_time)
+                elif real_type == "지수":
+                    self._process_index_data(code, start_time)
+                else:
+                    logger.debug(f"미지원 실시간 데이터 타입: {real_type} - {code}")
+                    
         except Exception as e:
-            logger.error(f"실시간 데이터 처리 오류: {e}")
-    
-    def _receive_chejan_data(self, gubun, item_cnt, fid_list):
-        """체결잔고 데이터 수신 처리"""
+            logger.error(f"실시간 데이터 처리 오류: {code} - {real_type} - {e}")
+            self.real_data_stats[code]['error_count'] += 1
+
+    def _process_stock_tick_data(self, code, start_time):
+        """주식 체결 데이터 처리"""
         try:
-            if gubun == "0":  # 주문체결통보
-                order_no = self.dynamicCall("GetChejanData(int)", 9203).strip()
-                code = self.dynamicCall("GetChejanData(int)", 9001).strip()
-                order_type = self.dynamicCall("GetChejanData(int)", 913).strip()
-                quantity = int(self.dynamicCall("GetChejanData(int)", 900).strip())
-                price = int(self.dynamicCall("GetChejanData(int)", 901).strip())
-                order_status = self.dynamicCall("GetChejanData(int)", 913).strip()
-                
-                # 체결 수량과 미체결 수량
-                filled_quantity = int(self.dynamicCall("GetChejanData(int)", 911).strip())
-                unfilled_quantity = int(self.dynamicCall("GetChejanData(int)", 912).strip())
-                
-                order_info = {
-                    'order_no': order_no,
+            # 실시간 데이터 추출
+            current_price = int(self.dynamicCall("GetCommRealData(QString, int)", code, 10))
+            volume = int(self.dynamicCall("GetCommRealData(QString, int)", code, 15))
+            change = int(self.dynamicCall("GetCommRealData(QString, int)", code, 12))
+            change_rate = float(self.dynamicCall("GetCommRealData(QString, int)", code, 13))
+            
+            # 추가 데이터 추출
+            open_price = int(self.dynamicCall("GetCommRealData(QString, int)", code, 16))
+            high_price = int(self.dynamicCall("GetCommRealData(QString, int)", code, 17))
+            low_price = int(self.dynamicCall("GetCommRealData(QString, int)", code, 18))
+            total_volume = int(self.dynamicCall("GetCommRealData(QString, int)", code, 20))
+            
+            # 데이터 검증
+            if not self._validate_real_data(code, current_price, volume):
+                return
+            
+            # 타임스탬프 생성
+            timestamp = datetime.now()
+            
+            # 데이터 구조화
+            tick_data = {
+                'code': code,
+                'current_price': current_price,
+                'volume': volume,
+                'change': change,
+                'change_rate': change_rate,
+                'open_price': open_price,
+                'high_price': high_price,
+                'low_price': low_price,
+                'total_volume': total_volume,
+                'timestamp': timestamp,
+                'real_type': RealDataType.STOCK_TICK.value
+            }
+            
+            # 캐시 업데이트
+            if self.real_data_config['enable_caching']:
+                self.real_data_cache[code] = {
+                    'data': tick_data,
+                    'timestamp': timestamp
+                }
+            
+            # 히스토리 업데이트
+            self.real_data_history[code].append(tick_data)
+            
+            # 통계 업데이트
+            self._update_real_data_stats(code, start_time)
+            
+            # 콜백 큐에 추가
+            if self.on_real_data_callback:
+                self.callback_queue.append({
+                    'type': 'real_data',
                     'code': code,
-                    'order_type': order_type,
-                    'quantity': quantity,
-                    'price': price,
-                    'filled_quantity': filled_quantity,
-                    'unfilled_quantity': unfilled_quantity,
-                    'status': order_status,
+                    'data': tick_data,
+                    'timestamp': timestamp
+                })
+            
+            # 로깅 (디버그 레벨로 변경하여 성능 향상)
+            logger.debug(f"실시간 체결: {code} - {current_price:,}원 ({change_rate:+.2f}%) - {volume:,}주")
+            
+        except Exception as e:
+            logger.error(f"주식 체결 데이터 처리 오류: {code} - {e}")
+            self.real_data_stats[code]['error_count'] += 1
+
+    def _process_stock_order_data(self, code, start_time):
+        """주식 주문 체결 데이터 처리"""
+        try:
+            # 주문 체결 데이터 추출
+            order_no = self.dynamicCall("GetCommRealData(QString, int)", code, 9203).strip()
+            order_type = self.dynamicCall("GetCommRealData(QString, int)", code, 913).strip()
+            quantity = int(self.dynamicCall("GetCommRealData(QString, int)", code, 900).strip())
+            price = int(self.dynamicCall("GetCommRealData(QString, int)", code, 901).strip())
+            
+            order_data = {
+                'code': code,
+                'order_no': order_no,
+                'order_type': order_type,
+                'quantity': quantity,
+                'price': price,
+                'timestamp': datetime.now(),
+                'real_type': RealDataType.STOCK_ORDER.value
+            }
+            
+            # 콜백 큐에 추가
+            if self.on_order_callback:
+                self.callback_queue.append({
+                    'type': 'order_data',
+                    'code': code,
+                    'data': order_data,
+                    'timestamp': datetime.now()
+                })
+            
+        except Exception as e:
+            logger.error(f"주식 주문 데이터 처리 오류: {code} - {e}")
+
+    def _process_index_data(self, code, start_time):
+        """지수 데이터 처리"""
+        try:
+            index_value = float(self.dynamicCall("GetCommRealData(QString, int)", code, 10))
+            change = float(self.dynamicCall("GetCommRealData(QString, int)", code, 12))
+            change_rate = float(self.dynamicCall("GetCommRealData(QString, int)", code, 13))
+            
+            index_data = {
+                'code': code,
+                'index_value': index_value,
+                'change': change,
+                'change_rate': change_rate,
+                'timestamp': datetime.now(),
+                'real_type': RealDataType.INDEX.value
+            }
+            
+            # 캐시 업데이트
+            if self.real_data_config['enable_caching']:
+                self.real_data_cache[code] = {
+                    'data': index_data,
                     'timestamp': datetime.now()
                 }
+            
+        except Exception as e:
+            logger.error(f"지수 데이터 처리 오류: {code} - {e}")
+
+    def _validate_real_data(self, code, price, volume):
+        """실시간 데이터 유효성 검증"""
+        try:
+            # 기본 검증
+            if price <= 0 or volume < 0:
+                logger.warning(f"유효하지 않은 데이터: {code} - 가격: {price}, 거래량: {volume}")
+                return False
+            
+            # 이전 데이터와 비교하여 급격한 변화 감지
+            if code in self.real_data_cache:
+                prev_data = self.real_data_cache[code]['data']
+                prev_price = prev_data.get('current_price', 0)
                 
-                # 주문 상태 업데이트
-                self.order_info[order_no] = order_info
+                if prev_price > 0:
+                    price_change_rate = abs(price - prev_price) / prev_price
+                    if price_change_rate > 0.3:  # 30% 이상 급격한 변화
+                        logger.warning(f"급격한 가격 변화 감지: {code} - {prev_price:,} → {price:,} ({price_change_rate:.2%})")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"데이터 검증 오류: {code} - {e}")
+            return False
+
+    def _update_real_data_stats(self, code, start_time):
+        """실시간 데이터 통계 업데이트"""
+        try:
+            processing_time = time.time() - start_time
+            stats = self.real_data_stats[code]
+            
+            # 평균 처리 시간 계산
+            if stats['update_count'] == 0:
+                stats['avg_processing_time'] = processing_time
+            else:
+                stats['avg_processing_time'] = (
+                    stats['avg_processing_time'] * stats['update_count'] + processing_time
+                ) / (stats['update_count'] + 1)
+            
+            stats['update_count'] += 1
+            stats['last_update'] = datetime.now()
+            
+        except Exception as e:
+            logger.error(f"통계 업데이트 오류: {code} - {e}")
+
+    def _process_batch_callbacks(self):
+        """배치 콜백 처리"""
+        if not self.callback_queue:
+            return
+        
+        try:
+            # 배치 크기만큼 콜백 처리
+            batch_size = min(self.real_data_config['batch_size'], len(self.callback_queue))
+            processed_count = 0
+            
+            while self.callback_queue and processed_count < batch_size:
+                callback_data = self.callback_queue.popleft()
+                processed_count += 1
                 
-                # 대기 중인 주문에서 제거 (완료된 경우)
-                if order_no in self.pending_orders:
-                    if order_status in ["체결", "취소", "거부"]:
-                        completed_order = self.pending_orders.pop(order_no)
-                        self.order_history[order_no] = completed_order
-                
-                # 주문 콜백 호출
-                if self.on_order_callback:
-                    self.on_order_callback(order_info)
-                
-                logger.info(f"주문 체결: {code} - {order_type} - {filled_quantity}/{quantity}주 - {price:,}원 - {order_status}")
+                try:
+                    if callback_data['type'] == 'real_data':
+                        if self.on_real_data_callback:
+                            self.on_real_data_callback(
+                                callback_data['code'], 
+                                callback_data['data']
+                            )
+                    elif callback_data['type'] == 'order_data':
+                        if self.on_order_callback:
+                            self.on_order_callback(callback_data['data'])
+                            
+                except Exception as e:
+                    logger.error(f"콜백 처리 오류: {e}")
+            
+            if processed_count > 0:
+                logger.debug(f"배치 콜백 처리 완료: {processed_count}건")
                 
         except Exception as e:
-            logger.error(f"체결잔고 데이터 처리 오류: {e}")
-    
-    def subscribe_real_data(self, code):
-        """실시간 데이터 구독"""
+            logger.error(f"배치 콜백 처리 오류: {e}")
+
+    def subscribe_real_data(self, code, real_type="주식체결", fid_list="10;15;12;13;16;17;18;20"):
+        """실시간 데이터 구독 (개선된 버전)"""
         try:
             if code not in self.real_data_codes:
                 result = self.dynamicCall("SetRealReg(QString, QString, QString, QString)", 
-                                        "0101", code, "10;15;12;13", "1")
+                                        "0101", code, fid_list, "1")
                 if result == 0:
                     self.real_data_codes.add(code)
-                    logger.info(f"실시간 데이터 구독: {code}")
+                    
+                    # 초기화
+                    if code not in self.real_data_cache:
+                        self.real_data_cache[code] = {}
+                    if code not in self.real_data_stats:
+                        self.real_data_stats[code] = {
+                            'last_update': None,
+                            'update_count': 0,
+                            'error_count': 0,
+                            'avg_processing_time': 0.0
+                        }
+                    
+                    logger.info(f"실시간 데이터 구독 성공: {code} - {real_type}")
+                    return True
                 else:
                     logger.error(f"실시간 데이터 구독 실패: {code} - {result}")
+                    return False
+            else:
+                logger.debug(f"이미 구독 중인 종목: {code}")
+                return True
+                
         except Exception as e:
-            logger.error(f"실시간 데이터 구독 오류: {e}")
-    
+            logger.error(f"실시간 데이터 구독 오류: {code} - {e}")
+            return False
+
     def unsubscribe_real_data(self, code):
-        """실시간 데이터 구독 해제"""
+        """실시간 데이터 구독 해제 (개선된 버전)"""
         try:
             if code in self.real_data_codes:
                 self.dynamicCall("SetRealRemove(QString, QString)", "0101", code)
                 self.real_data_codes.remove(code)
+                
+                # 캐시 및 히스토리 정리
+                if code in self.real_data_cache:
+                    del self.real_data_cache[code]
+                if code in self.real_data_history:
+                    del self.real_data_history[code]
+                if code in self.real_data_stats:
+                    del self.real_data_stats[code]
+                
                 logger.info(f"실시간 데이터 구독 해제: {code}")
+                return True
+            else:
+                logger.debug(f"구독하지 않은 종목: {code}")
+                return False
+                
         except Exception as e:
-            logger.error(f"실시간 데이터 구독 해제 오류: {e}")
-    
+            logger.error(f"실시간 데이터 구독 해제 오류: {code} - {e}")
+            return False
+
+    def get_real_data_cache(self, code=None):
+        """실시간 데이터 캐시 조회"""
+        try:
+            with self.data_lock:
+                if code:
+                    if code in self.real_data_cache:
+                        cache_data = self.real_data_cache[code]
+                        # 캐시 유효성 확인
+                        if (datetime.now() - cache_data['timestamp']).total_seconds() > self.real_data_config['cache_ttl']:
+                            logger.warning(f"캐시 만료: {code}")
+                            return None
+                        return cache_data['data']
+                    return None
+                else:
+                    return self.real_data_cache.copy()
+                    
+        except Exception as e:
+            logger.error(f"캐시 조회 오류: {e}")
+            return None
+
+    def get_real_data_history(self, code, limit=100):
+        """실시간 데이터 히스토리 조회"""
+        try:
+            with self.data_lock:
+                if code in self.real_data_history:
+                    history = list(self.real_data_history[code])
+                    return history[-limit:] if limit > 0 else history
+                return []
+                
+        except Exception as e:
+            logger.error(f"히스토리 조회 오류: {code} - {e}")
+            return []
+
+    def get_real_data_stats(self, code=None):
+        """실시간 데이터 통계 조회"""
+        try:
+            with self.data_lock:
+                if code:
+                    return self.real_data_stats.get(code, {})
+                else:
+                    return dict(self.real_data_stats)
+                    
+        except Exception as e:
+            logger.error(f"통계 조회 오류: {e}")
+            return {}
+
+    def clear_real_data_cache(self, code=None):
+        """실시간 데이터 캐시 정리"""
+        try:
+            with self.data_lock:
+                if code:
+                    if code in self.real_data_cache:
+                        del self.real_data_cache[code]
+                        logger.info(f"캐시 정리: {code}")
+                else:
+                    self.real_data_cache.clear()
+                    logger.info("전체 캐시 정리")
+                    
+        except Exception as e:
+            logger.error(f"캐시 정리 오류: {e}")
+
+    def set_real_data_config(self, **kwargs):
+        """실시간 데이터 설정 변경"""
+        try:
+            for key, value in kwargs.items():
+                if key in self.real_data_config:
+                    self.real_data_config[key] = value
+                    logger.info(f"실시간 데이터 설정 변경: {key} = {value}")
+                else:
+                    logger.warning(f"알 수 없는 설정: {key}")
+                    
+        except Exception as e:
+            logger.error(f"설정 변경 오류: {e}")
+
     def validate_order(self, account, code, quantity, price, order_type):
         """주문 유효성 검증"""
         try:
