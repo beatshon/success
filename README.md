@@ -133,6 +133,45 @@ python auto_trader.py
 - 키움증권의 이용약관을 확인하고 준수하세요
 - 투자 손실에 대한 책임은 사용자에게 있습니다
 
+## 🚨 문제 해결
+
+### OCX 파일 등록 오류 해결
+
+키움 OpenAPI 사용 시 다음과 같은 오류가 발생할 수 있습니다:
+```
+모듈 "C:\Program Files (x86)\Kiwoom OpenAPI\KHOPENAPI.OCX"을(를) 로드하지 못했습니다.
+지정된 모듈을 찾을 수 없습니다.
+```
+
+#### 자동 해결 방법
+```cmd
+# 관리자 권한으로 실행
+fix_ocx_registration.bat
+```
+
+#### 수동 해결 방법
+1. **키움 OpenAPI 재설치**
+   - https://www1.kiwoom.com/h/customer/download/VOpenApiInfoView
+   - 관리자 권한으로 설치
+
+2. **OCX 파일 수동 등록**
+   ```cmd
+   # 관리자 권한으로 명령 프롬프트 실행
+   regsvr32 "C:\Program Files (x86)\Kiwoom OpenAPI\KHOPENAPI.OCX"
+   ```
+
+3. **Visual C++ 재배포 패키지 설치**
+   - https://aka.ms/vs/17/release/vc_redist.x86.exe
+
+4. **Python 테스트**
+   ```cmd
+   python test_ocx_registration.py
+   ```
+
+#### 상세 가이드
+- [OCX 오류 해결 가이드](KIWOOM_OCX_ERROR_FIX.md)
+- [키움 API 설정 가이드](KIWOOM_API_SETUP_GUIDE.md)
+
 ## 🔧 고급 설정
 
 ### 로그 설정
