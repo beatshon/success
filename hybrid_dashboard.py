@@ -170,9 +170,43 @@ class HybridDashboard:
                 })
             
             return {
-                "labels": [d["label"] for d in distribution],
-                "data": [d["count"] for d in distribution],
-                "percentages": [d["percentage"] for d in distribution]
+                "type": "bar",
+                "data": {
+                    "labels": [d["label"] for d in distribution],
+                    "datasets": [{
+                        "label": "종목 수",
+                        "data": [d["count"] for d in distribution],
+                        "backgroundColor": [
+                            "#dc3545", "#fd7e14", "#ffc107", "#28a745", "#007bff"
+                        ],
+                        "borderColor": [
+                            "#c82333", "#e55a00", "#e0a800", "#1e7e34", "#0056b3"
+                        ],
+                        "borderWidth": 1
+                    }]
+                },
+                "options": {
+                    "responsive": True,
+                    "maintainAspectRatio": False,
+                    "plugins": {
+                        "legend": {
+                            "display": False
+                        },
+                        "tooltip": {
+                            "callbacks": {
+                                "label": lambda context: f"종목 수: {context.parsed.y}개 ({context.parsed.y/len(data)*100:.1f}%)"
+                            }
+                        }
+                    },
+                    "scales": {
+                        "y": {
+                            "beginAtZero": True,
+                            "ticks": {
+                                "stepSize": 1
+                            }
+                        }
+                    }
+                }
             }
         except Exception as e:
             logger.error(f"점수 분포 차트 생성 실패: {e}")
