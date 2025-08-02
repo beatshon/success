@@ -185,7 +185,8 @@ class SimpleNewsDashboard:
                         "news_count": stock["news_count"],
                         "sentiment_score": stock["sentiment_score"],
                         "recommendation": stock["recommendation"],
-                        "risk_level": stock["risk_level"]
+                        "risk_level": stock["risk_level"],
+                        "recent_news_links": stock.get("recent_news_links", [])
                     })
             
             # 상위 10개만 선택
