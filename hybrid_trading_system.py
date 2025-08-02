@@ -487,9 +487,11 @@ class HybridTradingSystem:
             # CSV 파일로 저장
             data = []
             for signal in signals:
+                sector = self.sector_mapping.get(signal.stock_code, '기타')
                 data.append({
                     'stock_code': signal.stock_code,
                     'stock_name': signal.stock_name,
+                    'sector': sector,
                     'news_score': signal.news_score,
                     'technical_score': signal.technical_score,
                     'combined_score': signal.combined_score,
