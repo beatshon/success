@@ -72,8 +72,8 @@ class TechnicalAnalyzer:
             return 50.0
         
         try:
-            rsi = talib.RSI(data['Close'].values, timeperiod=period)
-            return float(rsi[-1]) if not np.isnan(rsi[-1]) else 50.0
+            rsi = data.ta.rsi(length=period)
+            return float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
         except:
             return 50.0
     
@@ -83,19 +83,22 @@ class TechnicalAnalyzer:
             return 'hold', 0.0
         
         try:
-            macd, signal, hist = talib.MACD(data['Close'].values)
+            macd_data = data.ta.macd()
+            macd = macd_data['MACD_12_26_9']
+            signal = macd_data['MACDs_12_26_9']
+            hist = macd_data['MACDh_12_26_9']
             
             if len(macd) < 2 or len(signal) < 2:
                 return 'hold', 0.0
             
             # MACD가 시그널선을 상향돌파
-            if macd[-1] > signal[-1] and macd[-2] <= signal[-2]:
-                return 'buy', float(hist[-1])
+            if macd.iloc[-1] > signal.iloc[-1] and macd.iloc[-2] <= signal.iloc[-2]:
+                return 'buy', float(hist.iloc[-1])
             # MACD가 시그널선을 하향돌파
-            elif macd[-1] < signal[-1] and macd[-2] >= signal[-2]:
-                return 'sell', float(hist[-1])
+            elif macd.iloc[-1] < signal.iloc[-1] and macd.iloc[-2] >= signal.iloc[-2]:
+                return 'sell', float(hist.iloc[-1])
             else:
-                return 'hold', float(hist[-1])
+                return 'hold', float(hist.iloc[-1])
         except:
             return 'hold', 0.0
     
@@ -105,18 +108,18 @@ class TechnicalAnalyzer:
             return 'below', 0.0
         
         try:
-            ma5 = talib.SMA(data['Close'].values, timeperiod=5)
-            ma20 = talib.SMA(data['Close'].values, timeperiod=20)
+            ma5 = data.ta.sma(length=5)
+            ma20 = data.ta.sma(length=20)
             
             current_price = data['Close'].iloc[-1]
-            ma5_current = ma5[-1]
-            ma20_current = ma20[-1]
+            ma5_current = ma5.iloc[-1]
+            ma20_current = ma20.iloc[-1]
             
             # 골든크로스 (5일선이 20일선을 상향돌파)
-            if ma5_current > ma20_current and ma5[-2] <= ma20[-2]:
+            if ma5_current > ma20_current and ma5.iloc[-2] <= ma20.iloc[-2]:
                 return 'cross_up', current_price
             # 데드크로스 (5일선이 20일선을 하향돌파)
-            elif ma5_current < ma20_current and ma5[-2] >= ma20[-2]:
+            elif ma5_current < ma20_current and ma5.iloc[-2] >= ma20.iloc[-2]:
                 return 'cross_down', current_price
             # 5일선이 20일선 위에 있음
             elif ma5_current > ma20_current:
