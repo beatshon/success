@@ -196,53 +196,93 @@ class NaverNewsCollector:
         return keywords
     
     def _find_related_stocks(self, text: str) -> List[str]:
-        """텍스트에서 관련 종목 코드 찾기"""
-        related_stocks = []
+        """텍스트에서 관련 종목 코드 찾기 - 가중치 기반 개선된 매칭"""
+        text_lower = text.lower()
+        stock_scores = {}
         
         for stock_code, keywords in self.stock_keywords.items():
+            score = 0
+            matched_keywords = []
+            
             for keyword in keywords:
-                if keyword.lower() in text.lower():
-                    related_stocks.append(stock_code)
-                    break
+                keyword_lower = keyword.lower()
+                if keyword_lower in text_lower:
+                    # 키워드 우선순위에 따른 가중치 부여
+                    if keyword_lower in [stock_code.lower() for stock_code in ["삼성전자", "SK하이닉스", "NAVER", "카카오"]]:
+                        score += 10  # 주요 종목명은 높은 가중치
+                    elif "주식" in keyword_lower:
+                        score += 8   # "주식" 키워드는 높은 가중치
+                    elif len(keyword) >= 4:
+                        score += 5   # 긴 키워드는 중간 가중치
+                    else:
+                        score += 2   # 짧은 키워드는 낮은 가중치
+                    
+                    matched_keywords.append(keyword)
+            
+            # 최소 점수 이상일 때만 관련 종목으로 인정
+            if score >= 3:
+                stock_scores[stock_code] = {
+                    'score': score,
+                    'keywords': matched_keywords
+                }
         
-        return list(set(related_stocks))
+        # 점수 순으로 정렬하여 상위 종목들 반환
+        sorted_stocks = sorted(stock_scores.items(), key=lambda x: x[1]['score'], reverse=True)
+        
+        # 상위 3개 종목만 반환 (중복 매칭 방지)
+        result = []
+        for stock_code, info in sorted_stocks[:3]:
+            result.append(stock_code)
+            logger.debug(f"종목 {stock_code} 매칭 점수: {info['score']}, 키워드: {info['keywords']}")
+        
+        return result
     
     def collect_daily_news(self, keywords: List[str] = None) -> List[NewsItem]:
         """
-        당일 주요 뉴스 수집
+        당일 주요 뉴스 수집 - 키워드 최적화
         
         Args:
-            keywords: 검색할 키워드 리스트 (None이면 기본 키워드 사용)
+            keywords: 검색할 키워드 리스트 (None이면 최적화된 기본 키워드 사용)
             
         Returns:
             수집된 뉴스 아이템 리스트
         """
         if keywords is None:
+            # 최적화된 키워드 리스트 - 관련성과 정확도 향상
             keywords = [
-                "주식", "증시", "코스피", "코스닥", "투자",
-                "삼성전자", "SK하이닉스", "네이버", "카카오",
-                "LG화학", "현대자동차", "기아", "포스코",
-                "셀트리온", "카카오뱅크", "배터리", "반도체"
+                # 시장 전체
+                "주식시장", "증시동향", "코스피", "코스닥", "투자동향",
+                
+                # 주요 종목별 (정확한 매칭을 위해)
+                "삼성전자 주식", "SK하이닉스 주식", "네이버 주식", "카카오 주식",
+                "LG화학 주식", "현대자동차 주식", "기아 주식", "포스코 주식",
+                "셀트리온 주식", "카카오뱅크 주식",
+                
+                # 섹터별 키워드
+                "반도체 시장", "배터리 시장", "전기차 시장", "바이오 시장",
+                "통신 시장", "자동차 시장", "철강 시장", "전력 시장"
             ]
         
         all_news = []
         
         for keyword in keywords:
             logger.info(f"키워드 '{keyword}' 뉴스 수집 중...")
-            news_items = self.search_news(keyword, display=50, sort="date")
+            news_items = self.search_news(keyword, display=30, sort="date")  # 각 키워드당 30개로 조정
             all_news.extend(news_items)
             
             # API 호출 제한 방지
-            time.sleep(0.1)
+            time.sleep(0.2)  # 간격 증가
         
-        # 중복 제거 (제목 기준)
+        # 중복 제거 (제목 기준) 및 품질 필터링
         unique_news = {}
         for news in all_news:
             if news.title not in unique_news:
-                unique_news[news.title] = news
+                # 제목 길이가 너무 짧거나 긴 뉴스 제외
+                if 10 <= len(news.title) <= 200:
+                    unique_news[news.title] = news
         
         result = list(unique_news.values())
-        logger.info(f"총 {len(result)}개의 고유 뉴스 수집 완료")
+        logger.info(f"총 {len(result)}개의 고유 뉴스 수집 완료 (품질 필터링 적용)")
         
         return result
     
