@@ -186,7 +186,7 @@ class StockNewsAnalyzer:
                 # 최근 뉴스 제목과 링크 (최대 5개)
                 if len(recent_titles) < 5:
                     recent_titles.append(news.title)
-                    recent_links.append(news.link)
+                    recent_links.append(f"{news.title}|{news.link}")
             
             # 평균 감정 점수
             avg_sentiment = total_sentiment / len(news_list) if news_list else 0.0

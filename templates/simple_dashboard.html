@@ -334,13 +334,17 @@
                     newsLinksHtml = `
                         <div class="news-links">
                             <div class="news-links-title">📰 관련 뉴스:</div>
-                            ${stock.recent_news_links.map((link, index) => `
-                                <div class="news-link-item">
-                                    <a href="${link}" target="_blank" class="news-link">
-                                        뉴스 ${index + 1} 🔗
-                                    </a>
-                                </div>
-                            `).join('')}
+                            ${stock.recent_news_links.map((link, index) => {
+                                // 링크에서 도메인 추출
+                                const domain = new URL(link).hostname.replace('www.', '');
+                                return `
+                                    <div class="news-link-item">
+                                        <a href="${link}" target="_blank" class="news-link" title="${link}">
+                                            📰 ${domain} - 뉴스 ${index + 1}
+                                        </a>
+                                    </div>
+                                `;
+                            }).join('')}
                         </div>
                     `;
                 }
