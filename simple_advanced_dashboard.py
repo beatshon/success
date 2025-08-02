@@ -249,11 +249,17 @@ class SimpleAdvancedDashboard:
                     'data': list(sector_analysis.values()),
                     'backgroundColor': colors,
                     'borderWidth': 2,
-                    'borderColor': '#ffffff'
+                    'borderColor': '#ffffff',
+                    'hoverOffset': 4
                 }]
             },
             'options': {
                 'responsive': True,
+                'interaction': {
+                    'mode': 'nearest',
+                    'axis': 'xy',
+                    'intersect': False
+                },
                 'plugins': {
                     'legend': {
                         'position': 'bottom',
@@ -264,11 +270,18 @@ class SimpleAdvancedDashboard:
                     },
                     'tooltip': {
                         'enabled': True,
-                        'mode': 'index',
+                        'mode': 'nearest',
                         'intersect': False,
+                        'backgroundColor': 'rgba(0, 0, 0, 0.8)',
+                        'titleColor': '#ffffff',
+                        'bodyColor': '#ffffff',
+                        'borderColor': '#ffffff',
+                        'borderWidth': 1,
+                        'cornerRadius': 6,
+                        'displayColors': True,
                         'callbacks': {
                             'label': 'function(context) { return context.label + ": " + context.parsed.toFixed(1) + "점"; }',
-                            'title': 'function(context) { return context[0].label; }'
+                            'title': 'function(context) { return "섹터별 성과"; }'
                         }
                     }
                 }

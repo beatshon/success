@@ -253,14 +253,38 @@
                 return;
             }
 
+            // 기본 옵션 설정
+            const defaultOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        enabled: true,
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                return context.label + ': ' + context.parsed.toFixed(1) + '점';
+                            }
+                        }
+                    }
+                }
+            };
+
+            // 서버에서 받은 옵션과 기본 옵션 병합
+            const mergedOptions = {
+                ...defaultOptions,
+                ...data.options,
+                plugins: {
+                    ...defaultOptions.plugins,
+                    ...data.options.plugins
+                }
+            };
+
             new Chart(ctx, {
                 type: data.type,
                 data: data.data,
-                options: {
-                    ...data.options,
-                    responsive: true,
-                    maintainAspectRatio: false
-                }
+                options: mergedOptions
             });
         }
 
