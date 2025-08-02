@@ -62,134 +62,93 @@ class StockTrendCorrelation:
 class NaverTrendAnalyzer:
     """네이버 트렌드 분석기"""
     
-    def __init__(self, client_id: str, client_secret: str):
-        self.client_id = client_id
-        self.client_secret = client_secret
-        self.base_url = "https://openapi.naver.com/v1"
-        
-        # 헤더 설정
-        self.headers = {
-            'X-Naver-Client-Id': client_id,
-            'X-Naver-Client-Secret': client_secret,
-            'Content-Type': 'application/json'
-        }
-        
-        # 키워드-주식 매핑 확장
-        self.keyword_stock_mapping = self._load_keyword_mapping()
-        
-        # 트렌드 데이터 저장소
-        self.trend_data = {}
-        self.correlation_data = {}
-        self.historical_data = {}
-        
-        # 분석 설정
-        self.analysis_interval = 1800  # 30분마다 분석
-        self.correlation_threshold = 0.25  # 상관관계 임계값
-        self.momentum_window = 24  # 24시간 모멘텀 계산
-        
-        # 실행 상태
-        self.running = False
-        self.analysis_thread = None
-        
-        # 데이터베이스 초기화
-        self._init_database()
-        
-        # 실시간 모니터링 키워드
-        self.monitoring_keywords = [
-            "삼성전자", "SK하이닉스", "네이버", "카카오", "현대차", "기아",
-            "LG화학", "삼성SDI", "테슬라", "전기차", "배터리", "AI", "반도체",
-            "부동산", "금리", "인플레이션", "달러", "원화", "코로나", "백신"
-        ]
-        
-        # 주가지수 관련 설정
-        self.market_indices = {
-            'KOSPI': '코스피',
-            'KOSDAQ': '코스닥',
-            'KOSPI200': '코스피200',
-            'KOSDAQ150': '코스닥150'
-        }
-        
-        # 시장 상황별 투자 전략 설정
-        self.market_strategies = {
-            'BULL_MARKET': {
-                'high_correlation_threshold': 0.6,  # 높은 상관관계 종목 임계값
-                'low_correlation_threshold': 0.3,   # 낮은 상관관계 종목 임계값
-                'high_correlation_weight': 0.7,     # 높은 상관관계 종목 가중치
-                'low_correlation_weight': 0.3       # 낮은 상관관계 종목 가중치
-            },
-            'BEAR_MARKET': {
-                'high_correlation_threshold': 0.6,
-                'low_correlation_threshold': 0.3,
-                'high_correlation_weight': 0.2,     # 하락장에서는 높은 상관관계 종목 비중 감소
-                'low_correlation_weight': 0.8       # 하락장에서는 낮은 상관관계 종목 비중 증가
-            },
-            'SIDEWAYS_MARKET': {
-                'high_correlation_threshold': 0.6,
-                'low_correlation_threshold': 0.3,
-                'high_correlation_weight': 0.5,     # 횡보장에서는 균형
-                'low_correlation_weight': 0.5
-            }
-        }
-        
-        # 시장 상황 판단 임계값
-        self.market_trend_thresholds = {
-            'BULL_MARKET': 0.05,    # 5% 이상 상승 시 상승장
-            'BEAR_MARKET': -0.05,   # 5% 이상 하락 시 하락장
-            'SIDEWAYS_MARKET': 0.02 # ±2% 범위 시 횡보장
-        }
-        
-    def _init_database(self):
-        """데이터베이스 초기화"""
+    def __init__(self):
+        """초기화"""
         try:
-            self.db_path = "data/naver_trends.db"
-            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+            # 로깅 설정
+            logger.info("네이버 트렌드 분석기 초기화 시작")
             
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            # 설정 로드
+            self.config = self._load_config()
             
-            # 트렌드 데이터 테이블
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS trend_data (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    keyword TEXT NOT NULL,
-                    trend_type TEXT NOT NULL,
-                    value REAL NOT NULL,
-                    timestamp DATETIME NOT NULL,
-                    sentiment_score REAL DEFAULT 0.0,
-                    volume_change REAL DEFAULT 0.0,
-                    momentum_score REAL DEFAULT 0.0,
-                    volatility REAL DEFAULT 0.0
-                )
-            ''')
+            # API 키 설정
+            self.search_api_key = self.config.get('search_api_key', '')
+            self.news_api_key = self.config.get('news_api_key', '')
             
-            # 상관관계 데이터 테이블
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS correlation_data (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    stock_code TEXT NOT NULL,
-                    stock_name TEXT NOT NULL,
-                    keyword TEXT NOT NULL,
-                    correlation_score REAL NOT NULL,
-                    trend_direction TEXT NOT NULL,
-                    confidence_level REAL NOT NULL,
-                    impact_score REAL DEFAULT 0.0,
-                    prediction_accuracy REAL DEFAULT 0.0,
-                    last_updated DATETIME NOT NULL
-                )
-            ''')
+            # 모니터링 키워드 설정
+            self.monitoring_keywords = [
+                '삼성전자', 'SK하이닉스', '네이버', '카카오', '현대차', '기아', 
+                'LG화학', '삼성SDI', '테슬라', '전기차', '배터리', 'AI', '반도체',
+                '부동산', '금리', '인플레이션', '달러', '원화', '코로나', '백신'
+            ]
             
-            # 인덱스 생성
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_trend_keyword_time ON trend_data(keyword, timestamp)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_corr_stock_keyword ON correlation_data(stock_code, keyword)')
+            # 키워드-주식 매핑 설정
+            self.keyword_stock_mapping = {
+                '005930': ['삼성전자', '반도체', 'AI'],
+                '000660': ['SK하이닉스', '반도체'],
+                '035420': ['네이버', 'AI'],
+                '035720': ['카카오', 'AI'],
+                '051910': ['현대차', '전기차'],
+                '006400': ['기아', '전기차'],
+                '051910': ['LG화학', '배터리'],
+                '006400': ['삼성SDI', '배터리']
+            }
             
-            conn.commit()
-            conn.close()
-            logger.info("네이버 트렌드 데이터베이스 초기화 완료")
+            # 데이터 저장소 초기화
+            self.trend_data = {}
+            self.news_data = {}
+            self.correlation_data = {}
+            
+            # 분석 상태
+            self.analysis_running = False
+            self.last_analysis_time = None
+            
+            # 주가지수 관련 설정
+            self.market_indices = {
+                'KOSPI': '코스피',
+                'KOSDAQ': '코스닥',
+                'KOSPI200': '코스피200',
+                'KOSDAQ150': '코스닥150'
+            }
+            
+            # 시장 상황별 투자 전략 설정
+            self.market_strategies = {
+                'BULL_MARKET': {
+                    'high_correlation_threshold': 0.6,
+                    'low_correlation_threshold': 0.3,
+                    'high_correlation_weight': 0.7,
+                    'low_correlation_weight': 0.3
+                },
+                'BEAR_MARKET': {
+                    'high_correlation_threshold': 0.6,
+                    'low_correlation_threshold': 0.3,
+                    'high_correlation_weight': 0.2,
+                    'low_correlation_weight': 0.8
+                },
+                'SIDEWAYS_MARKET': {
+                    'high_correlation_threshold': 0.6,
+                    'low_correlation_threshold': 0.3,
+                    'high_correlation_weight': 0.5,
+                    'low_correlation_weight': 0.5
+                }
+            }
+            
+            # 시장 상황 판단 임계값
+            self.market_trend_thresholds = {
+                'BULL_MARKET': 0.05,
+                'BEAR_MARKET': -0.05,
+                'SIDEWAYS_MARKET': 0.02
+            }
+            
+            # 가상 데이터 초기 생성
+            self._generate_virtual_trend_data()
+            
+            logger.info("네이버 트렌드 분석기 초기화 완료")
             
         except Exception as e:
-            logger.error(f"데이터베이스 초기화 실패: {e}")
-            handle_error(ErrorType.DATABASE_ERROR, ErrorLevel.ERROR, f"데이터베이스 초기화 실패: {e}")
-        
+            logger.error(f"네이버 트렌드 분석기 초기화 실패: {e}")
+            raise
+    
     def _load_keyword_mapping(self) -> Dict[str, List[str]]:
         """키워드-주식 매핑 로드 (확장 버전)"""
         return {
@@ -1563,11 +1522,11 @@ class NaverTrendAnalyzer:
 
     def start_continuous_analysis(self):
         """연속 분석 시작"""
-        if self.running:
+        if self.analysis_running:
             logger.warning("이미 분석이 실행 중입니다.")
             return
         
-        self.running = True
+        self.analysis_running = True
         self.analysis_thread = threading.Thread(target=self._analysis_worker)
         self.analysis_thread.daemon = True
         self.analysis_thread.start()
@@ -1575,14 +1534,14 @@ class NaverTrendAnalyzer:
 
     def stop_continuous_analysis(self):
         """연속 분석 중지"""
-        self.running = False
+        self.analysis_running = False
         if self.analysis_thread:
             self.analysis_thread.join(timeout=5)
         logger.info("네이버 트렌드 연속 분석이 중지되었습니다.")
 
     def _analysis_worker(self):
         """분석 워커 스레드"""
-        while self.running:
+        while self.analysis_running:
             try:
                 # 실시간 데이터 수집
                 asyncio.run(self.collect_real_time_data())
@@ -1751,7 +1710,7 @@ def main():
         client_secret = os.getenv('NAVER_CLIENT_SECRET', 'YOUR_NAVER_CLIENT_SECRET')
         
         # 분석기 초기화
-        analyzer = NaverTrendAnalyzer(client_id, client_secret)
+        analyzer = NaverTrendAnalyzer()
         
         # 연속 분석 시작
         analyzer.start_continuous_analysis()
