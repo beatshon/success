@@ -231,7 +231,7 @@ class SimpleNewsDashboard:
             if not os.path.exists(analysis_dir):
                 return {}
             
-            files = [f for f in os.listdir(analysis_dir) if f.startswith("stock_analysis_")]
+            files = [f for f in os.listdir(analysis_dir) if f.startswith("stock_analysis_") and f.endswith(".csv")]
             if not files:
                 return {}
             
