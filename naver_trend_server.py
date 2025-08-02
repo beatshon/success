@@ -541,29 +541,25 @@ class NaverTrendServer:
     def initialize_analyzer(self):
         """트렌드 분석기 초기화"""
         try:
-            self.analyzer = NaverTrendAnalyzer(self.client_id, self.client_secret)
-            logger.info("네이버 트렌드 분석기가 초기화되었습니다.")
-            
-            # 연속 분석 시작
-            self.analyzer.start_continuous_analysis()
-            
+            logger.info("네이버 트렌드 분석기 초기화 시작")
+            self.analyzer = NaverTrendAnalyzer()
+            logger.info("네이버 트렌드 분석기 초기화 완료")
         except Exception as e:
             logger.error(f"트렌드 분석기 초기화 실패: {e}")
-            handle_error(ErrorType.INITIALIZATION_ERROR, ErrorLevel.ERROR, f"네이버 트렌드 분석기 초기화 실패: {e}")
+            raise Exception(f"네이버 트렌드 분석기 초기화 실패: {e}")
 
     def start(self):
         """서버 시작"""
         try:
-            # 분석기 초기화
             self.initialize_analyzer()
+            self._setup_routes() # Changed from setup_routes to _setup_routes
             
-            # Flask 서버 시작
-            logger.info(f"네이버 트렌드 분석 서버가 시작되었습니다: http://localhost:{self.port}")
-            self.app.run(host='0.0.0.0', port=self.port, debug=False)
+            logger.info(f"네이버 트렌드 서버가 포트 {self.port}에서 시작되었습니다.")
+            self.app.run(host='0.0.0.0', port=self.port, debug=True)
             
         except Exception as e:
-            logger.error(f"서버 시작 실패: {e}")
-            handle_error(ErrorType.SYSTEM_ERROR, ErrorLevel.ERROR, f"네이버 트렌드 서버 시작 실패: {e}")
+            logger.error(f"네이버 트렌드 서버 시작 실패: {e}")
+            raise Exception(f"네이버 트렌드 서버 시작 실패: {e}")
 
     def stop(self):
         """서버 중지"""
