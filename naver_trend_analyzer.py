@@ -1702,6 +1702,34 @@ class NaverTrendAnalyzer:
             logger.error(f"트렌딩 키워드 조회 실패: {e}")
             return []
 
+    def _load_config(self) -> Dict:
+        """설정 파일 로드"""
+        try:
+            config_path = "config/kiwoom_config.py"
+            if os.path.exists(config_path):
+                # 설정 파일이 있으면 로드
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("config", config_path)
+                config_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(config_module)
+                
+                return {
+                    'search_api_key': getattr(config_module, 'NAVER_SEARCH_API_KEY', ''),
+                    'news_api_key': getattr(config_module, 'NAVER_NEWS_API_KEY', ''),
+                }
+            else:
+                # 기본 설정 반환
+                return {
+                    'search_api_key': '',
+                    'news_api_key': '',
+                }
+        except Exception as e:
+            logger.error(f"설정 파일 로드 실패: {e}")
+            return {
+                'search_api_key': '',
+                'news_api_key': '',
+            }
+
 def main():
     """메인 함수"""
     try:
