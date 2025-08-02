@@ -5,7 +5,7 @@ import os
 import json
 import pandas as pd
 from datetime import datetime, timedelta
-from flask import Flask, render_template, jsonify, redirect, url_for
+from flask import Flask, render_template, jsonify, redirect, url_for, Response
 from loguru import logger
 
 class IntegratedDashboard:
@@ -90,6 +90,69 @@ class IntegratedDashboard:
                 return jsonify(status)
             except Exception as e:
                 logger.error(f"시스템 상태 조회 실패: {e}")
+                return jsonify({"error": str(e)})
+        
+        @self.app.route('/api/data-validation')
+        def get_data_validation():
+            try:
+                validation = self._validate_data_quality()
+                return jsonify(validation)
+            except Exception as e:
+                logger.error(f"데이터 검증 조회 실패: {e}")
+                return jsonify({"error": str(e)})
+        
+        @self.app.route('/api/alerts')
+        def get_alerts():
+            try:
+                alerts = self._get_alerts()
+                return jsonify(alerts)
+            except Exception as e:
+                logger.error(f"알림 조회 실패: {e}")
+                return jsonify({"error": str(e)})
+        
+        @self.app.route('/api/export/hybrid-data')
+        def export_hybrid_data():
+            try:
+                hybrid_data = self._get_latest_hybrid_data()
+                if hybrid_data is None:
+                    return jsonify({"error": "하이브리드 데이터가 없습니다"})
+                
+                # CSV 형식으로 변환
+                csv_data = hybrid_data.to_csv(index=False, encoding='utf-8-sig')
+                
+                response = Response(csv_data, mimetype='text/csv')
+                response.headers['Content-Disposition'] = f'attachment; filename=hybrid_analysis_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+                return response
+                
+            except Exception as e:
+                logger.error(f"하이브리드 데이터 내보내기 실패: {e}")
+                return jsonify({"error": str(e)})
+        
+        @self.app.route('/api/export/simulation-data')
+        def export_simulation_data():
+            try:
+                simulation_data = self._get_latest_simulation_data()
+                if simulation_data is None:
+                    return jsonify({"error": "시뮬레이션 데이터가 없습니다"})
+                
+                # CSV 형식으로 변환
+                csv_data = simulation_data.to_csv(index=True, encoding='utf-8-sig')
+                
+                response = Response(csv_data, mimetype='text/csv')
+                response.headers['Content-Disposition'] = f'attachment; filename=simulation_results_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+                return response
+                
+            except Exception as e:
+                logger.error(f"시뮬레이션 데이터 내보내기 실패: {e}")
+                return jsonify({"error": str(e)})
+        
+        @self.app.route('/api/settings')
+        def get_settings():
+            try:
+                settings = self._get_settings()
+                return jsonify(settings)
+            except Exception as e:
+                logger.error(f"설정 조회 실패: {e}")
                 return jsonify({"error": str(e)})
     
     def _get_latest_hybrid_data(self):
@@ -461,6 +524,124 @@ class IntegratedDashboard:
         except Exception as e:
             logger.error(f"시스템 상태 확인 실패: {e}")
             return {"error": str(e)}
+    
+    def _get_alerts(self):
+        """알림을 생성합니다."""
+        try:
+            alerts = []
+            
+            # 데이터 검증 결과 확인
+            validation = self._validate_data_quality()
+            
+            # 하이브리드 데이터 알림
+            if not validation["hybrid_data"]["valid"]:
+                alerts.append({
+                    "type": "error",
+                    "title": "하이브리드 데이터 오류",
+                    "message": f"데이터 품질 문제: {', '.join(validation['hybrid_data']['issues'])}",
+                    "time": datetime.now().strftime("%H:%M"),
+                    "priority": "high"
+                })
+            elif validation["hybrid_data"]["issues"]:
+                alerts.append({
+                    "type": "warning",
+                    "title": "하이브리드 데이터 경고",
+                    "message": f"데이터 품질 경고: {', '.join(validation['hybrid_data']['issues'])}",
+                    "time": datetime.now().strftime("%H:%M"),
+                    "priority": "medium"
+                })
+            
+            # 시뮬레이션 데이터 알림
+            if not validation["simulation_data"]["valid"]:
+                alerts.append({
+                    "type": "error",
+                    "title": "시뮬레이션 데이터 오류",
+                    "message": f"데이터 품질 문제: {', '.join(validation['simulation_data']['issues'])}",
+                    "time": datetime.now().strftime("%H:%M"),
+                    "priority": "high"
+                })
+            elif validation["simulation_data"]["issues"]:
+                alerts.append({
+                    "type": "warning",
+                    "title": "시뮬레이션 데이터 경고",
+                    "message": f"데이터 품질 경고: {', '.join(validation['simulation_data']['issues'])}",
+                    "time": datetime.now().strftime("%H:%M"),
+                    "priority": "medium"
+                })
+            
+            # 성과 알림
+            overview = self._get_overview_data()
+            if overview and "simulation" in overview:
+                sim_data = overview["simulation"]
+                
+                # 높은 수익률 알림
+                if sim_data.get("total_return", 0) > 10:
+                    alerts.append({
+                        "type": "success",
+                        "title": "높은 수익률 달성",
+                        "message": f"총 수익률 {sim_data['total_return']}% 달성!",
+                        "time": datetime.now().strftime("%H:%M"),
+                        "priority": "low"
+                    })
+                
+                # 높은 승률 알림
+                if sim_data.get("win_rate", 0) > 70:
+                    alerts.append({
+                        "type": "success",
+                        "title": "높은 승률 달성",
+                        "message": f"승률 {sim_data['win_rate']}% 달성!",
+                        "time": datetime.now().strftime("%H:%M"),
+                        "priority": "low"
+                    })
+                
+                # 큰 손실 알림
+                if sim_data.get("max_drawdown", 0) < -20:
+                    alerts.append({
+                        "type": "error",
+                        "title": "큰 손실 발생",
+                        "message": f"최대 낙폭 {sim_data['max_drawdown']}% 발생",
+                        "time": datetime.now().strftime("%H:%M"),
+                        "priority": "high"
+                    })
+            
+            # 데이터 신선도 알림
+            hybrid_data = self._get_latest_hybrid_data()
+            if hybrid_data is not None:
+                # 파일 수정 시간 확인 (간단한 예시)
+                csv_files = [f for f in os.listdir(self.hybrid_data_dir) if f.endswith('.csv')]
+                if csv_files:
+                    latest_file = max(csv_files, key=lambda x: os.path.getctime(os.path.join(self.hybrid_data_dir, x)))
+                    file_path = os.path.join(self.hybrid_data_dir, latest_file)
+                    file_time = datetime.fromtimestamp(os.path.getctime(file_path))
+                    time_diff = datetime.now() - file_time
+                    
+                    if time_diff.total_seconds() > 3600:  # 1시간 이상
+                        alerts.append({
+                            "type": "warning",
+                            "title": "데이터 신선도 경고",
+                            "message": f"하이브리드 데이터가 {int(time_diff.total_seconds() / 3600)}시간 전에 업데이트됨",
+                            "time": datetime.now().strftime("%H:%M"),
+                            "priority": "medium"
+                        })
+            
+            return {"alerts": alerts}
+            
+        except Exception as e:
+            logger.error(f"알림 생성 실패: {e}")
+            return {"alerts": []}
+    
+    def _get_settings(self):
+        """통합 대시보드의 설정을 반환합니다."""
+        return {
+            "dashboard_title": "통합 대시보드",
+            "data_refresh_interval": 300, # 초 단위
+            "alerts_refresh_interval": 60, # 초 단위
+            "export_file_format": "csv",
+            "data_directories": {
+                "hybrid_analysis": self.hybrid_data_dir,
+                "simulation_results": self.simulation_data_dir
+            }
+        }
     
     def start_dashboard(self, host='0.0.0.0', port=8080, debug=False):
         """통합 대시보드를 시작합니다."""

@@ -385,6 +385,32 @@
             transform: scale(1.1);
             box-shadow: 0 6px 25px rgba(0,100,255,0.4);
         }
+
+        /* 알림 스타일 */
+        .alert {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .alert-error {
+            background: #ffeaea;
+            border-left: 4px solid #ff4444;
+            color: #d32f2f;
+        }
+        .alert-warning {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            color: #f57c00;
+        }
+        .alert-success {
+            background: #e8f5e8;
+            border-left: 4px solid #00c851;
+            color: #388e3c;
+        }
     </style>
 </head>
 <body>
@@ -439,6 +465,21 @@
                         <div class="spinner"></div>
                         데이터 로딩 중...
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 알림 섹션 -->
+        <div class="dashboard-grid" id="alertsSection" style="display: none;">
+            <div class="card" style="grid-column: 1 / -1;">
+                <div class="card-header">
+                    <h2 class="card-title">시스템 알림</h2>
+                    <div class="card-icon icon-purple">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                </div>
+                <div id="alertsContainer">
+                    <!-- 알림이 여기에 표시됩니다 -->
                 </div>
             </div>
         </div>
@@ -585,6 +626,7 @@
             loadRecentActivity();
             loadChartData();
             loadSystemStatus();
+            loadAlerts(); // 알림 로드
             
             // 30초마다 자동 새로고침
             setInterval(refreshData, 30000);
@@ -597,6 +639,7 @@
             loadRecentActivity();
             loadChartData();
             loadSystemStatus();
+            loadAlerts(); // 알림 새로고침
         }
 
         // 개요 데이터 로드
@@ -661,6 +704,10 @@
                     <div class="stat-value">${simulationData.max_drawdown.toFixed(2)}%</div>
                     <div class="stat-label">최대 낙폭</div>
                 </div>
+                <div class="stat-item">
+                    <div class="stat-value">${simulationData.sharpe_ratio.toFixed(2)}</div>
+                    <div class="stat-label">샤프 비율</div>
+                </div>
             `;
         }
 
@@ -682,6 +729,58 @@
             } catch (error) {
                 console.error('빠른 통계 로드 실패:', error);
             }
+        }
+
+        // 알림 로드
+        async function loadAlerts() {
+            try {
+                const response = await fetch('/api/alerts');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('알림 로드 실패:', data.error);
+                    return;
+                }
+                
+                updateAlerts(data.alerts);
+                
+            } catch (error) {
+                console.error('알림 로드 실패:', error);
+            }
+        }
+
+        // 알림 업데이트
+        function updateAlerts(alerts) {
+            const alertsSection = document.getElementById('alertsSection');
+            const container = document.getElementById('alertsContainer');
+            
+            if (!alerts || alerts.length === 0) {
+                alertsSection.style.display = 'none';
+                return;
+            }
+            
+            alertsSection.style.display = 'block';
+            
+            let html = '';
+            alerts.forEach(alert => {
+                const alertClass = alert.type === 'error' ? 'alert-error' : 
+                                 alert.type === 'warning' ? 'alert-warning' : 'alert-success';
+                const icon = alert.type === 'error' ? 'fas fa-exclamation-triangle' :
+                           alert.type === 'warning' ? 'fas fa-exclamation-circle' : 'fas fa-check-circle';
+                
+                html += `
+                    <div class="alert ${alertClass}" style="margin-bottom: 10px; padding: 12px; border-radius: 8px; display: flex; align-items: center; gap: 10px;">
+                        <i class="${icon}" style="font-size: 16px;"></i>
+                        <div style="flex: 1;">
+                            <div style="font-weight: 600; margin-bottom: 4px;">${alert.title}</div>
+                            <div style="font-size: 14px; color: #666;">${alert.message}</div>
+                        </div>
+                        <div style="font-size: 12px; color: #999;">${alert.time}</div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
         }
 
         // 상위 종목 업데이트
