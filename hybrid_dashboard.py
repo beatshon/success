@@ -191,11 +191,6 @@ class HybridDashboard:
                     "plugins": {
                         "legend": {
                             "display": False
-                        },
-                        "tooltip": {
-                            "callbacks": {
-                                "label": lambda context: f"종목 수: {context.parsed.y}개 ({context.parsed.y/len(data)*100:.1f}%)"
-                            }
                         }
                     },
                     "scales": {
