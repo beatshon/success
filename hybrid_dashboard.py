@@ -28,8 +28,11 @@ class HybridDashboard:
                     return jsonify({"error": "하이브리드 분석 데이터를 찾을 수 없습니다."})
                 
                 summary_stats = self._generate_summary_stats(latest_data)
+                top_stocks = self._get_top_stocks(latest_data)
+                
                 return jsonify({
                     "summary": summary_stats,
+                    "top_stocks": top_stocks,
                     "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 })
             except Exception as e:
