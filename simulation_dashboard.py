@@ -189,7 +189,12 @@ class SimulationDashboard:
             if 'portfolio_value' not in data.columns:
                 return {"error": "포트폴리오 가치 데이터가 없습니다."}
             
-            dates = pd.date_range(start=data.index[0], periods=len(data), freq='D')
+            # 날짜 컬럼이 있는지 확인
+            if 'date' in data.columns:
+                dates = pd.to_datetime(data['date'])
+            else:
+                # 인덱스를 날짜로 사용
+                dates = pd.date_range(start=data.index[0], periods=len(data), freq='D')
             
             trace = go.Scatter(
                 x=dates,
@@ -251,7 +256,11 @@ class SimulationDashboard:
             rolling_max = cumulative_returns.expanding().max()
             drawdown = (cumulative_returns - rolling_max) / rolling_max * 100
             
-            dates = pd.date_range(start=data.index[0], periods=len(drawdown), freq='D')
+            # 날짜 컬럼이 있는지 확인
+            if 'date' in data.columns:
+                dates = pd.to_datetime(data['date'])[1:]  # 첫 번째 행 제외 (수익률 계산으로 인해)
+            else:
+                dates = pd.date_range(start=data.index[0], periods=len(drawdown), freq='D')
             
             trace = go.Scatter(
                 x=dates,
