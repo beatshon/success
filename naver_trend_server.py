@@ -360,6 +360,169 @@ class NaverTrendServer:
             except Exception as e:
                 logger.error(f"즉시 데이터 수집 실패: {e}")
                 return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/market-adaptive-signals/<stock_code>')
+        def get_market_adaptive_signals(stock_code):
+            """시장 상황에 적응하는 투자 신호 API"""
+            try:
+                if not self.analyzer:
+                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                
+                # 가상의 시장 데이터 (실제로는 시장 API에서 가져와야 함)
+                market_data = {
+                    'stock_prices': [100 + i * 0.5 + np.random.normal(0, 1) for i in range(30)],
+                    'market_prices': [100 + i * 0.1 + np.random.normal(0, 0.5) for i in range(30)]
+                }
+                
+                signals = self.analyzer.get_market_adaptive_signals(stock_code, market_data)
+                return jsonify(signals)
+                
+            except Exception as e:
+                logger.error(f"시장 적응 신호 조회 실패 ({stock_code}): {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/market-correlation/<stock_code>')
+        def get_market_correlation(stock_code):
+            """주식-시장 상관관계 분석 API"""
+            try:
+                if not self.analyzer:
+                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                
+                # 가상의 시장 데이터
+                market_data = {
+                    'stock_prices': [100 + i * 0.5 + np.random.normal(0, 1) for i in range(30)],
+                    'market_prices': [100 + i * 0.1 + np.random.normal(0, 0.5) for i in range(30)]
+                }
+                
+                correlation = self.analyzer.analyze_market_correlation(stock_code, market_data)
+                
+                if correlation:
+                    return jsonify(correlation)
+                else:
+                    return jsonify({'error': '상관관계 데이터를 찾을 수 없습니다.'}), 404
+                
+            except Exception as e:
+                logger.error(f"시장 상관관계 분석 실패 ({stock_code}): {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/market-condition')
+        def get_market_condition():
+            """시장 상황 판단 API"""
+            try:
+                if not self.analyzer:
+                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                
+                # 가상의 시장 데이터
+                market_data = {
+                    'market_prices': [100 + i * 0.1 + np.random.normal(0, 0.5) for i in range(30)]
+                }
+                
+                market_condition = self.analyzer.determine_market_condition(market_data)
+                
+                # 시장 상황별 상세 정보
+                condition_info = {
+                    'condition': market_condition,
+                    'description': self._get_market_condition_description(market_condition),
+                    'strategy': self.analyzer.market_strategies.get(market_condition, {}),
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+                return jsonify(condition_info)
+                
+            except Exception as e:
+                logger.error(f"시장 상황 판단 실패: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/portfolio-recommendation')
+        def get_portfolio_recommendation():
+            """포트폴리오 추천 API"""
+            try:
+                if not self.analyzer:
+                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                
+                # 가상의 시장 데이터
+                market_data = {
+                    'market_prices': [100 + i * 0.1 + np.random.normal(0, 0.5) for i in range(30)]
+                }
+                
+                recommendation = self.analyzer.get_portfolio_recommendation(market_data)
+                return jsonify(recommendation)
+                
+            except Exception as e:
+                logger.error(f"포트폴리오 추천 실패: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/market-strategy/<market_condition>')
+        def get_market_strategy(market_condition):
+            """시장 상황별 투자 전략 API"""
+            try:
+                if not self.analyzer:
+                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                
+                strategy = self.analyzer.market_strategies.get(market_condition.upper(), {})
+                
+                if not strategy:
+                    return jsonify({'error': '해당 시장 상황의 전략을 찾을 수 없습니다.'}), 404
+                
+                strategy_info = {
+                    'market_condition': market_condition.upper(),
+                    'strategy': strategy,
+                    'risk_management': self.analyzer._get_risk_management_advice(market_condition.upper()),
+                    'market_timing': self.analyzer._get_market_timing_advice(market_condition.upper()),
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+                return jsonify(strategy_info)
+                
+            except Exception as e:
+                logger.error(f"시장 전략 조회 실패: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/correlation-analysis')
+        def get_correlation_analysis():
+            """전체 상관관계 분석 API"""
+            try:
+                if not self.analyzer:
+                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                
+                # 주요 종목들의 상관관계 분석
+                major_stocks = ['005930', '000660', '035420', '035720', '051910', '006400']
+                correlations = []
+                
+                for stock_code in major_stocks:
+                    try:
+                        market_data = {
+                            'stock_prices': [100 + i * 0.5 + np.random.normal(0, 1) for i in range(30)],
+                            'market_prices': [100 + i * 0.1 + np.random.normal(0, 0.5) for i in range(30)]
+                        }
+                        
+                        correlation = self.analyzer.analyze_market_correlation(stock_code, market_data)
+                        if correlation:
+                            correlations.append(correlation)
+                    except Exception as e:
+                        logger.error(f"상관관계 분석 실패 ({stock_code}): {e}")
+                
+                # 상관관계 수준별 분류
+                high_correlation = [c for c in correlations if c['correlation_level'] == 'HIGH']
+                medium_correlation = [c for c in correlations if c['correlation_level'] == 'MEDIUM']
+                low_correlation = [c for c in correlations if c['correlation_level'] == 'LOW']
+                
+                analysis_result = {
+                    'total_stocks': len(correlations),
+                    'high_correlation_count': len(high_correlation),
+                    'medium_correlation_count': len(medium_correlation),
+                    'low_correlation_count': len(low_correlation),
+                    'high_correlation_stocks': [c['stock_code'] for c in high_correlation],
+                    'low_correlation_stocks': [c['stock_code'] for c in low_correlation],
+                    'detailed_analysis': correlations,
+                    'timestamp': datetime.now().isoformat()
+                }
+                
+                return jsonify(analysis_result)
+                
+            except Exception as e:
+                logger.error(f"전체 상관관계 분석 실패: {e}")
+                return jsonify({'error': str(e)}), 500
 
     def _data_collection_worker(self):
         """데이터 수집 워커 스레드"""
@@ -419,6 +582,19 @@ class NaverTrendServer:
             
         except Exception as e:
             logger.error(f"서버 중지 실패: {e}")
+
+    def _get_market_condition_description(self, market_condition: str) -> str:
+        """시장 상황 설명"""
+        descriptions = {
+            'BULL_MARKET': '확실한 상승장 - 적극적 투자 전략 권장',
+            'BEAR_MARKET': '확실한 하락장 - 보수적 투자 전략 권장',
+            'SIDEWAYS_MARKET': '횡보장 - 균형잡힌 투자 전략 권장',
+            'VOLATILE_BULL_MARKET': '변동성 높은 상승장 - 신중한 적극 투자',
+            'VOLATILE_BEAR_MARKET': '변동성 높은 하락장 - 매우 보수적 투자',
+            'VOLATILE_SIDEWAYS_MARKET': '불안정한 횡보장 - 리스크 관리 중시'
+        }
+        
+        return descriptions.get(market_condition, '알 수 없는 시장 상황')
 
 def main():
     """메인 함수"""
