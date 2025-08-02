@@ -430,6 +430,14 @@
                     <i class="fas fa-play-circle"></i>
                     시뮬레이션
                 </a>
+                <button class="btn btn-primary" onclick="exportHybridData()">
+                    <i class="fas fa-download"></i>
+                    하이브리드 데이터 내보내기
+                </button>
+                <button class="btn btn-secondary" onclick="exportSimulationData()">
+                    <i class="fas fa-download"></i>
+                    시뮬레이션 데이터 내보내기
+                </button>
             </div>
         </div>
     </header>
@@ -627,6 +635,7 @@
             loadChartData();
             loadSystemStatus();
             loadAlerts(); // 알림 로드
+            loadDataValidation(); // 데이터 검증 로드
             
             // 30초마다 자동 새로고침
             setInterval(refreshData, 30000);
@@ -640,6 +649,7 @@
             loadChartData();
             loadSystemStatus();
             loadAlerts(); // 알림 새로고침
+            loadDataValidation(); // 데이터 검증 새로고침
         }
 
         // 개요 데이터 로드
@@ -1138,6 +1148,82 @@
             `;
             
             container.innerHTML = html;
+        }
+
+        // 하이브리드 데이터 내보내기
+        function exportHybridData() {
+            window.open('/api/export/hybrid-data', '_blank');
+        }
+
+        // 시뮬레이션 데이터 내보내기
+        function exportSimulationData() {
+            window.open('/api/export/simulation-data', '_blank');
+        }
+
+        // 데이터 검증 로드
+        async function loadDataValidation() {
+            try {
+                const response = await fetch('/api/data-validation');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('데이터 검증 로드 실패:', data.error);
+                    return;
+                }
+                
+                // 검증 결과를 알림에 반영
+                updateValidationAlerts(data);
+                
+            } catch (error) {
+                console.error('데이터 검증 로드 실패:', error);
+            }
+        }
+
+        // 검증 알림 업데이트
+        function updateValidationAlerts(validation) {
+            const alerts = [];
+            
+            // 하이브리드 데이터 검증 결과
+            if (!validation.hybrid_data.valid) {
+                alerts.push({
+                    type: 'error',
+                    title: '하이브리드 데이터 검증 실패',
+                    message: validation.hybrid_data.issues.join(', '),
+                    time: new Date().toLocaleTimeString(),
+                    priority: 'high'
+                });
+            } else if (validation.hybrid_data.issues.length > 0) {
+                alerts.push({
+                    type: 'warning',
+                    title: '하이브리드 데이터 경고',
+                    message: validation.hybrid_data.issues.join(', '),
+                    time: new Date().toLocaleTimeString(),
+                    priority: 'medium'
+                });
+            }
+            
+            // 시뮬레이션 데이터 검증 결과
+            if (!validation.simulation_data.valid) {
+                alerts.push({
+                    type: 'error',
+                    title: '시뮬레이션 데이터 검증 실패',
+                    message: validation.simulation_data.issues.join(', '),
+                    time: new Date().toLocaleTimeString(),
+                    priority: 'high'
+                });
+            } else if (validation.simulation_data.issues.length > 0) {
+                alerts.push({
+                    type: 'warning',
+                    title: '시뮬레이션 데이터 경고',
+                    message: validation.simulation_data.issues.join(', '),
+                    time: new Date().toLocaleTimeString(),
+                    priority: 'medium'
+                });
+            }
+            
+            if (alerts.length > 0) {
+                updateAlerts(alerts);
+            }
         }
 
         // 최근 활동 로드
