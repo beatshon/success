@@ -1087,68 +1087,410 @@ class NaverTrendAnalyzer:
             logger.error(f"신호 점수 계산 실패: {e}")
             return 0.0
 
-    def get_market_sentiment(self) -> Dict:
-        """전체 시장 감정 분석"""
+    def analyze_market_correlation(self, stock_code: str, market_data: Dict) -> Dict:
+        """주식-시장 상관관계 분석"""
         try:
-            market_sentiment = {
-                'overall_sentiment': 0.0,
-                'sector_sentiments': {},
-                'trending_keywords': [],
-                'risk_level': 'MEDIUM',
+            # 과거 주식 데이터와 시장 데이터 비교
+            stock_prices = market_data.get('stock_prices', [])
+            market_prices = market_data.get('market_prices', [])
+            
+            if len(stock_prices) < 20 or len(market_prices) < 20:
+                return None
+            
+            # 최소 길이로 맞춤
+            min_length = min(len(stock_prices), len(market_prices))
+            stock_prices = stock_prices[-min_length:]
+            market_prices = market_prices[-min_length:]
+            
+            # 상관계수 계산
+            correlation = np.corrcoef(stock_prices, market_prices)[0, 1]
+            
+            if np.isnan(correlation):
+                correlation = 0.0
+            
+            # 베타 계수 계산 (변동성 대비)
+            stock_returns = np.diff(stock_prices) / stock_prices[:-1]
+            market_returns = np.diff(market_prices) / market_prices[:-1]
+            
+            if len(stock_returns) > 0 and len(market_returns) > 0:
+                # 베타 = Cov(stock, market) / Var(market)
+                covariance = np.cov(stock_returns, market_returns)[0, 1]
+                market_variance = np.var(market_returns)
+                beta = covariance / market_variance if market_variance > 0 else 1.0
+            else:
+                beta = 1.0
+            
+            # 상관관계 수준 분류
+            if abs(correlation) > 0.7:
+                correlation_level = 'HIGH'
+            elif abs(correlation) > 0.4:
+                correlation_level = 'MEDIUM'
+            else:
+                correlation_level = 'LOW'
+            
+            # 베타 수준 분류
+            if abs(beta) > 1.2:
+                beta_level = 'HIGH_VOLATILITY'
+            elif abs(beta) > 0.8:
+                beta_level = 'MEDIUM_VOLATILITY'
+            else:
+                beta_level = 'LOW_VOLATILITY'
+            
+            return {
+                'stock_code': stock_code,
+                'correlation': correlation,
+                'correlation_level': correlation_level,
+                'beta': beta,
+                'beta_level': beta_level,
+                'market_sensitivity': 'HIGH' if abs(correlation) > 0.6 else 'LOW',
+                'analysis_period': min_length,
                 'timestamp': datetime.now().isoformat()
             }
             
-            # 섹터별 감정 분석
-            sectors = {
-                'technology': ['삼성전자', 'SK하이닉스', '네이버', '카카오', 'LG전자'],
-                'automotive': ['현대차', '기아', 'LG화학', '삼성SDI'],
-                'finance': ['KB금융', '신한지주', '하나금융지주', '우리금융지주'],
-                'biotech': ['삼성바이오로직스', '셀트리온', '한미약품', '유한양행'],
-                'retail': ['신세계', '롯데쇼핑', '아모레퍼시픽', 'LG생활건강']
+        except Exception as e:
+            logger.error(f"시장 상관관계 분석 실패 ({stock_code}): {e}")
+            return None
+
+    def determine_market_condition(self, market_data: Dict) -> str:
+        """시장 상황 판단"""
+        try:
+            market_prices = market_data.get('market_prices', [])
+            
+            if len(market_prices) < 10:
+                return 'SIDEWAYS_MARKET'
+            
+            # 최근 10일간의 변화율 계산
+            recent_prices = market_prices[-10:]
+            price_change = (recent_prices[-1] - recent_prices[0]) / recent_prices[0]
+            
+            # 변동성 계산
+            returns = np.diff(recent_prices) / recent_prices[:-1]
+            volatility = np.std(returns)
+            
+            # 시장 상황 판단
+            if price_change > self.market_trend_thresholds['BULL_MARKET']:
+                if volatility < 0.02:  # 변동성이 낮으면 확실한 상승장
+                    return 'BULL_MARKET'
+                else:
+                    return 'VOLATILE_BULL_MARKET'
+            elif price_change < self.market_trend_thresholds['BEAR_MARKET']:
+                if volatility < 0.02:  # 변동성이 낮으면 확실한 하락장
+                    return 'BEAR_MARKET'
+                else:
+                    return 'VOLATILE_BEAR_MARKET'
+            else:
+                if volatility > 0.03:  # 변동성이 높으면 불안정한 횡보장
+                    return 'VOLATILE_SIDEWAYS_MARKET'
+                else:
+                    return 'SIDEWAYS_MARKET'
+                    
+        except Exception as e:
+            logger.error(f"시장 상황 판단 실패: {e}")
+            return 'SIDEWAYS_MARKET'
+
+    def get_market_adaptive_signals(self, stock_code: str, market_data: Dict) -> Dict:
+        """시장 상황에 적응하는 투자 신호 생성"""
+        try:
+            # 시장 상황 판단
+            market_condition = self.determine_market_condition(market_data)
+            
+            # 주식-시장 상관관계 분석
+            correlation_analysis = self.analyze_market_correlation(stock_code, market_data)
+            
+            if not correlation_analysis:
+                return self.get_investment_signals(stock_code)  # 기본 신호 반환
+            
+            # 기본 투자 신호 가져오기
+            base_signals = self.get_investment_signals(stock_code)
+            
+            # 시장 상황별 전략 적용
+            strategy = self.market_strategies.get(market_condition, self.market_strategies['SIDEWAYS_MARKET'])
+            
+            # 상관관계 수준에 따른 신호 조정
+            adjusted_signals = self._adjust_signals_by_correlation(
+                base_signals, correlation_analysis, strategy, market_condition
+            )
+            
+            # 시장 상황 정보 추가
+            adjusted_signals['market_condition'] = market_condition
+            adjusted_signals['correlation_analysis'] = correlation_analysis
+            adjusted_signals['strategy_applied'] = strategy
+            
+            return adjusted_signals
+            
+        except Exception as e:
+            logger.error(f"시장 적응 신호 생성 실패 ({stock_code}): {e}")
+            return {'error': str(e)}
+
+    def _adjust_signals_by_correlation(self, base_signals: Dict, correlation_analysis: Dict, 
+                                     strategy: Dict, market_condition: str) -> Dict:
+        """상관관계에 따른 신호 조정"""
+        try:
+            adjusted_signals = base_signals.copy()
+            
+            correlation = correlation_analysis['correlation']
+            correlation_level = correlation_analysis['correlation_level']
+            beta = correlation_analysis['beta']
+            
+            # 상관관계 수준에 따른 가중치 적용
+            if correlation_level == 'HIGH':
+                weight = strategy['high_correlation_weight']
+            else:
+                weight = strategy['low_correlation_weight']
+            
+            # 시장 상황별 신호 조정
+            if market_condition in ['BEAR_MARKET', 'VOLATILE_BEAR_MARKET']:
+                # 하락장에서는 높은 상관관계 종목 신호를 약화
+                if correlation_level == 'HIGH':
+                    adjusted_signals['overall_signal'] = self._weaken_signal(base_signals['overall_signal'])
+                    adjusted_signals['confidence'] *= 0.7  # 신뢰도 감소
+                    
+                    # 신호 메시지 추가
+                    adjusted_signals['market_adjustment'] = {
+                        'reason': '하락장에서 높은 시장 상관관계 종목 신호 약화',
+                        'correlation': correlation,
+                        'beta': beta,
+                        'weight_applied': weight
+                    }
+                    
+            elif market_condition in ['BULL_MARKET', 'VOLATILE_BULL_MARKET']:
+                # 상승장에서는 높은 상관관계 종목 신호를 강화
+                if correlation_level == 'HIGH':
+                    adjusted_signals['overall_signal'] = self._strengthen_signal(base_signals['overall_signal'])
+                    adjusted_signals['confidence'] *= 1.2  # 신뢰도 증가
+                    
+                    adjusted_signals['market_adjustment'] = {
+                        'reason': '상승장에서 높은 시장 상관관계 종목 신호 강화',
+                        'correlation': correlation,
+                        'beta': beta,
+                        'weight_applied': weight
+                    }
+                    
+            else:  # 횡보장
+                # 횡보장에서는 중립적 조정
+                adjusted_signals['market_adjustment'] = {
+                    'reason': '횡보장에서 중립적 신호 조정',
+                    'correlation': correlation,
+                    'beta': beta,
+                    'weight_applied': weight
+                }
+            
+            # 베타 계수에 따른 추가 조정
+            if abs(beta) > 1.5:  # 고변동성 종목
+                adjusted_signals['risk_level'] = 'HIGH'
+                adjusted_signals['market_adjustment']['beta_warning'] = '고변동성 종목 - 리스크 주의'
+            elif abs(beta) < 0.5:  # 저변동성 종목
+                adjusted_signals['risk_level'] = 'LOW'
+                adjusted_signals['market_adjustment']['beta_note'] = '저변동성 종목 - 안정적'
+            
+            return adjusted_signals
+            
+        except Exception as e:
+            logger.error(f"신호 조정 실패: {e}")
+            return base_signals
+
+    def _weaken_signal(self, signal: str) -> str:
+        """신호 약화"""
+        if signal == 'BUY':
+            return 'HOLD'
+        elif signal == 'HOLD':
+            return 'SELL'
+        else:
+            return signal
+
+    def _strengthen_signal(self, signal: str) -> str:
+        """신호 강화"""
+        if signal == 'HOLD':
+            return 'BUY'
+        elif signal == 'SELL':
+            return 'HOLD'
+        else:
+            return signal
+
+    def get_portfolio_recommendation(self, market_data: Dict) -> Dict:
+        """시장 상황별 포트폴리오 추천"""
+        try:
+            market_condition = self.determine_market_condition(market_data)
+            strategy = self.market_strategies.get(market_condition, self.market_strategies['SIDEWAYS_MARKET'])
+            
+            # 주요 종목들의 시장 적응 신호 수집
+            major_stocks = ['005930', '000660', '035420', '035720', '051910', '006400']
+            stock_signals = []
+            
+            for stock_code in major_stocks:
+                try:
+                    signal = self.get_market_adaptive_signals(stock_code, market_data)
+                    if 'error' not in signal:
+                        stock_signals.append(signal)
+                except Exception as e:
+                    logger.error(f"포트폴리오 신호 수집 실패 ({stock_code}): {e}")
+            
+            # 상관관계 수준별 분류
+            high_correlation_stocks = []
+            low_correlation_stocks = []
+            
+            for signal in stock_signals:
+                correlation_analysis = signal.get('correlation_analysis', {})
+                correlation_level = correlation_analysis.get('correlation_level', 'LOW')
+                
+                if correlation_level == 'HIGH':
+                    high_correlation_stocks.append(signal)
+                else:
+                    low_correlation_stocks.append(signal)
+            
+            # 포트폴리오 추천 생성
+            recommendation = {
+                'market_condition': market_condition,
+                'strategy': strategy,
+                'portfolio_allocation': {
+                    'high_correlation_weight': strategy['high_correlation_weight'],
+                    'low_correlation_weight': strategy['low_correlation_weight']
+                },
+                'recommended_stocks': {
+                    'high_correlation': [s['stock_code'] for s in high_correlation_stocks[:3]],
+                    'low_correlation': [s['stock_code'] for s in low_correlation_stocks[:3]]
+                },
+                'risk_management': self._get_risk_management_advice(market_condition),
+                'market_timing': self._get_market_timing_advice(market_condition),
+                'timestamp': datetime.now().isoformat()
             }
             
-            sector_scores = {}
+            return recommendation
             
-            for sector, keywords in sectors.items():
-                sector_score = 0.0
-                keyword_count = 0
-                
-                for keyword in keywords:
-                    recent_trends = self.get_historical_trend_data(keyword, days=3)
-                    if recent_trends:
-                        latest_trend = recent_trends[0]
-                        sector_score += latest_trend.sentiment_score
-                        keyword_count += 1
-                
-                if keyword_count > 0:
-                    avg_score = sector_score / keyword_count
-                    sector_scores[sector] = avg_score
-                    market_sentiment['sector_sentiments'][sector] = {
-                        'score': avg_score,
-                        'level': self._get_sentiment_level(avg_score)
-                    }
+        except Exception as e:
+            logger.error(f"포트폴리오 추천 생성 실패: {e}")
+            return {'error': str(e)}
+
+    def _get_risk_management_advice(self, market_condition: str) -> Dict:
+        """리스크 관리 조언"""
+        advice = {
+            'BULL_MARKET': {
+                'position_size': '적극적 포지션 (70-80%)',
+                'stop_loss': '5-7% 손절',
+                'take_profit': '15-20% 익절',
+                'focus': '높은 상관관계 종목 위주'
+            },
+            'BEAR_MARKET': {
+                'position_size': '보수적 포지션 (20-30%)',
+                'stop_loss': '3-5% 손절',
+                'take_profit': '10-15% 익절',
+                'focus': '낮은 상관관계 종목 위주'
+            },
+            'SIDEWAYS_MARKET': {
+                'position_size': '중립적 포지션 (40-60%)',
+                'stop_loss': '4-6% 손절',
+                'take_profit': '12-18% 익절',
+                'focus': '균형잡힌 포트폴리오'
+            },
+            'VOLATILE_BEAR_MARKET': {
+                'position_size': '매우 보수적 포지션 (10-20%)',
+                'stop_loss': '2-3% 손절',
+                'take_profit': '8-12% 익절',
+                'focus': '방어적 종목 위주'
+            },
+            'VOLATILE_BULL_MARKET': {
+                'position_size': '적극적 포지션 (60-70%)',
+                'stop_loss': '6-8% 손절',
+                'take_profit': '18-25% 익절',
+                'focus': '고성장 종목 위주'
+            }
+        }
+        
+        return advice.get(market_condition, advice['SIDEWAYS_MARKET'])
+
+    def _get_market_timing_advice(self, market_condition: str) -> Dict:
+        """시장 타이밍 조언"""
+        advice = {
+            'BULL_MARKET': {
+                'entry_strategy': '적극적 매수',
+                'exit_strategy': '익절 기준 상향',
+                'rebalancing': '월 1회 리밸런싱',
+                'caution': '과열 징후 주의'
+            },
+            'BEAR_MARKET': {
+                'entry_strategy': '분할 매수',
+                'exit_strategy': '손절 기준 엄격',
+                'rebalancing': '분기별 리밸런싱',
+                'caution': '추가 하락 가능성'
+            },
+            'SIDEWAYS_MARKET': {
+                'entry_strategy': '범위 매수',
+                'exit_strategy': '균형적 익절/손절',
+                'rebalancing': '월 1회 리밸런싱',
+                'caution': '방향성 불명확'
+            },
+            'VOLATILE_BEAR_MARKET': {
+                'entry_strategy': '매우 보수적 매수',
+                'exit_strategy': '빠른 손절',
+                'rebalancing': '주별 리밸런싱',
+                'caution': '높은 변동성 주의'
+            },
+            'VOLATILE_BULL_MARKET': {
+                'entry_strategy': '적극적 매수',
+                'exit_strategy': '유연한 익절',
+                'rebalancing': '주별 리밸런싱',
+                'caution': '급락 가능성 주의'
+            }
+        }
+        
+        return advice.get(market_condition, advice['SIDEWAYS_MARKET'])
+
+    def get_market_sentiment(self) -> Dict:
+        """전체 시장 감정 분석 (기존 메서드 확장)"""
+        try:
+            # 기존 시장 감정 분석
+            market_sentiment = super().get_market_sentiment() if hasattr(super(), 'get_market_sentiment') else {}
             
-            # 전체 감정 점수
-            if sector_scores:
-                market_sentiment['overall_sentiment'] = sum(sector_scores.values()) / len(sector_scores)
+            # 시장 상황별 추가 분석
+            market_analysis = {
+                'market_condition': 'UNKNOWN',
+                'trend_strength': 0.0,
+                'volatility_level': 'MEDIUM',
+                'correlation_insights': {},
+                'portfolio_recommendations': {}
+            }
             
-            # 트렌딩 키워드 찾기
-            trending_keywords = self._find_trending_keywords()
-            market_sentiment['trending_keywords'] = trending_keywords
+            # 가상의 시장 데이터 (실제로는 시장 API에서 가져와야 함)
+            virtual_market_data = {
+                'market_prices': [100 + i * 0.1 + np.random.normal(0, 0.5) for i in range(30)]
+            }
             
-            # 리스크 레벨 결정
-            overall_sentiment = market_sentiment['overall_sentiment']
-            if overall_sentiment > 0.3:
-                market_sentiment['risk_level'] = 'LOW'
-            elif overall_sentiment < -0.3:
-                market_sentiment['risk_level'] = 'HIGH'
+            # 시장 상황 판단
+            market_condition = self.determine_market_condition(virtual_market_data)
+            market_analysis['market_condition'] = market_condition
+            
+            # 변동성 수준 계산
+            market_prices = virtual_market_data['market_prices']
+            returns = np.diff(market_prices) / market_prices[:-1]
+            volatility = np.std(returns)
+            
+            if volatility > 0.03:
+                market_analysis['volatility_level'] = 'HIGH'
+            elif volatility < 0.01:
+                market_analysis['volatility_level'] = 'LOW'
             else:
-                market_sentiment['risk_level'] = 'MEDIUM'
+                market_analysis['volatility_level'] = 'MEDIUM'
+            
+            # 포트폴리오 추천
+            portfolio_rec = self.get_portfolio_recommendation(virtual_market_data)
+            market_analysis['portfolio_recommendations'] = portfolio_rec
+            
+            # 상관관계 인사이트
+            market_analysis['correlation_insights'] = {
+                'high_correlation_stocks': ['005930', '000660', '035420'],
+                'low_correlation_stocks': ['051910', '006400', '207940'],
+                'defensive_stocks': ['105560', '055550', '086790'],
+                'growth_stocks': ['035720', '225570', '251270']
+            }
+            
+            # 기존 데이터와 병합
+            if isinstance(market_sentiment, dict):
+                market_sentiment.update(market_analysis)
             
             return market_sentiment
             
         except Exception as e:
-            logger.error(f"시장 감정 분석 실패: {e}")
+            logger.error(f"확장된 시장 감정 분석 실패: {e}")
             return {'error': str(e)}
 
     def _find_trending_keywords(self) -> List[Dict]:
