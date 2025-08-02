@@ -15,128 +15,49 @@
         }
         
         .dashboard-container {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            margin: 20px;
-            padding: 30px;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
         }
         
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 30px;
-        }
-        
-        .trend-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            transition: transform 0.3s ease;
-        }
-        
-        .trend-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .signal-buy {
-            border-left: 4px solid #28a745;
-            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
-        }
-        
-        .signal-sell {
-            border-left: 4px solid #dc3545;
-            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-        }
-        
-        .signal-hold {
-            border-left: 4px solid #ffc107;
-            background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
-        }
-        
-        .sentiment-positive {
-            color: #28a745;
-            font-weight: bold;
-        }
-        
-        .sentiment-negative {
-            color: #dc3545;
-            font-weight: bold;
-        }
-        
-        .sentiment-neutral {
-            color: #6c757d;
-            font-weight: bold;
-        }
-        
-        .keyword-tag {
-            display: inline-block;
-            background: #e9ecef;
-            color: #495057;
-            padding: 4px 8px;
-            border-radius: 12px;
-            margin: 2px;
-            font-size: 0.8rem;
-        }
-        
-        .keyword-tag.trending {
-            background: #28a745;
-            color: white;
-        }
-        
-        .keyword-tag.declining {
-            background: #dc3545;
-            color: white;
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .stat-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-        }
-        
-        .stat-value {
-            font-size: 2rem;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        
-        .chart-container {
-            background: white;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
             border-radius: 15px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            margin: 0;
+            font-weight: 700;
+        }
+        
+        .header p {
+            color: #7f8c8d;
+            margin: 5px 0 0 0;
         }
         
         .control-panel {
-            background: white;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
             border-radius: 15px;
             padding: 20px;
             margin-bottom: 20px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
         
         .btn-gradient {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(45deg, #667eea, #764ba2);
             border: none;
             color: white;
             padding: 10px 20px;
             border-radius: 25px;
+            margin: 5px;
             transition: all 0.3s ease;
+            font-weight: 600;
         }
         
         .btn-gradient:hover {
@@ -145,10 +66,178 @@
             color: white;
         }
         
-        .loading {
-            display: none;
+        .btn-gradient:active {
+            transform: translateY(0);
+        }
+        
+        .btn-gradient.btn-danger {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+        }
+        
+        .btn-gradient.btn-success {
+            background: linear-gradient(45deg, #27ae60, #2ecc71);
+        }
+        
+        .btn-gradient.btn-warning {
+            background: linear-gradient(45deg, #f39c12, #e67e22);
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .stat-card h3 {
+            color: #2c3e50;
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+            font-weight: 700;
+        }
+        
+        .stat-card p {
+            color: #7f8c8d;
+            margin: 0;
+            font-weight: 600;
+        }
+        
+        .trend-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            border-left: 4px solid #667eea;
+        }
+        
+        .trend-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+        
+        .trend-card h5 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+        
+        .trend-card h5 i {
+            margin-right: 8px;
+            color: #667eea;
+        }
+        
+        .signal-buy {
+            border-left-color: #27ae60;
+            background: linear-gradient(135deg, rgba(39, 174, 96, 0.1) 0%, rgba(46, 204, 113, 0.1) 100%);
+        }
+        
+        .signal-sell {
+            border-left-color: #e74c3c;
+            background: linear-gradient(135deg, rgba(231, 76, 60, 0.1) 0%, rgba(192, 57, 43, 0.1) 100%);
+        }
+        
+        .signal-hold {
+            border-left-color: #f39c12;
+            background: linear-gradient(135deg, rgba(243, 156, 18, 0.1) 0%, rgba(230, 126, 34, 0.1) 100%);
+        }
+        
+        .sentiment-score {
+            font-size: 2rem;
+            font-weight: 700;
             text-align: center;
             padding: 20px;
+            border-radius: 10px;
+            margin: 10px 0;
+        }
+        
+        .sentiment-positive {
+            color: #27ae60;
+            background: rgba(39, 174, 96, 0.1);
+        }
+        
+        .sentiment-negative {
+            color: #e74c3c;
+            background: rgba(231, 76, 60, 0.1);
+        }
+        
+        .sentiment-neutral {
+            color: #f39c12;
+            background: rgba(243, 156, 18, 0.1);
+        }
+        
+        .correlation-score {
+            font-size: 1.5rem;
+            font-weight: 600;
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        
+        .correlation-high {
+            color: #e74c3c;
+            background: rgba(231, 76, 60, 0.1);
+        }
+        
+        .correlation-medium {
+            color: #f39c12;
+            background: rgba(243, 156, 18, 0.1);
+        }
+        
+        .correlation-low {
+            color: #27ae60;
+            background: rgba(39, 174, 96, 0.1);
+        }
+        
+        .keyword-tag {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 8px 15px;
+            margin: 5px;
+            border-radius: 20px;
+            font-weight: 600;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .keyword-tag:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+        
+        .keyword-tag.trending {
+            border-left: 3px solid #27ae60;
+        }
+        
+        .keyword-tag.declining {
+            border-left: 3px solid #e74c3c;
+        }
+        
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            margin: 20px 0;
         }
         
         .spinner-border {
@@ -156,27 +245,104 @@
             height: 3rem;
         }
         
-        .alert-custom {
-            border-radius: 15px;
+        .alert {
+            border-radius: 10px;
             border: none;
-            padding: 15px 20px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
         }
         
-        .correlation-score {
-            font-size: 1.5rem;
-            font-weight: bold;
+        .alert-info {
+            background: linear-gradient(135deg, rgba(52, 152, 219, 0.1) 0%, rgba(41, 128, 185, 0.1) 100%);
+            color: #2c3e50;
+            border-left: 4px solid #3498db;
         }
         
-        .correlation-high {
-            color: #28a745;
+        .alert-warning {
+            background: linear-gradient(135deg, rgba(243, 156, 18, 0.1) 0%, rgba(230, 126, 34, 0.1) 100%);
+            color: #2c3e50;
+            border-left: 4px solid #f39c12;
         }
         
-        .correlation-medium {
-            color: #ffc107;
+        .alert-danger {
+            background: linear-gradient(135deg, rgba(231, 76, 60, 0.1) 0%, rgba(192, 57, 43, 0.1) 100%);
+            color: #2c3e50;
+            border-left: 4px solid #e74c3c;
         }
         
-        .correlation-low {
-            color: #dc3545;
+        .alert-success {
+            background: linear-gradient(135deg, rgba(39, 174, 96, 0.1) 0%, rgba(46, 204, 113, 0.1) 100%);
+            color: #2c3e50;
+            border-left: 4px solid #27ae60;
+        }
+        
+        .card {
+            border: none;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+        
+        .card-body {
+            padding: 20px;
+        }
+        
+        .card-title {
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        
+        .card-title i {
+            margin-right: 8px;
+            color: #667eea;
+        }
+        
+        .table {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .table th {
+            background: rgba(102, 126, 234, 0.1);
+            border: none;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        
+        .table td {
+            border: none;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+        
+        .badge {
+            font-size: 0.8rem;
+            padding: 5px 10px;
+            border-radius: 15px;
+        }
+        
+        .text-muted {
+            color: #7f8c8d !important;
+        }
+        
+        @media (max-width: 768px) {
+            .dashboard-container {
+                padding: 10px;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 15px;
+            }
+            
+            .stat-card h3 {
+                font-size: 1.5rem;
+            }
+            
+            .trend-card {
+                padding: 15px;
+            }
         }
     </style>
 </head>
@@ -415,110 +581,133 @@
 
         // 대시보드 데이터 로드
         async function loadDashboardData() {
-            showLoading(true);
-            
             try {
-                // 트렌드 요약 데이터
                 const response = await fetch('/api/naver-trends');
                 const data = await response.json();
                 
                 if (data.error) {
-                    showAlert('데이터 로드 실패: ' + data.error, 'danger');
+                    console.error('대시보드 데이터 로드 실패:', data.error);
                     return;
                 }
                 
-                updateStats(data.summary);
-                updateTrendingKeywords(data.trending_keywords);
-                updateMarketSentiment(data.market_sentiment);
-                
-                // 차트 업데이트
-                updateCharts();
+                updateStats(data.summary || {});
+                updateTrendingKeywords(data.trending_keywords || []);
+                updateMarketSentiment(data.market_sentiment || {});
                 
             } catch (error) {
-                console.error('데이터 로드 오류:', error);
-                showAlert('데이터 로드 중 오류가 발생했습니다.', 'danger');
-            } finally {
-                showLoading(false);
+                console.error('대시보드 데이터 로드 오류:', error);
             }
         }
 
         // 통계 업데이트
         function updateStats(summary) {
-            document.getElementById('totalKeywords').textContent = summary.total_keywords || 0;
-            document.getElementById('activeTrends').textContent = summary.active_trends || 0;
-            document.getElementById('positiveTrends').textContent = summary.positive_trends || 0;
-            document.getElementById('negativeTrends').textContent = summary.negative_trends || 0;
-            document.getElementById('marketSentiment').textContent = summary.market_sentiment || '중립';
+            const stats = {
+                'total-keywords': summary.total_keywords || 0,
+                'active-trends': summary.active_trends || 0,
+                'positive-trends': summary.positive_trends || 0,
+                'negative-trends': summary.negative_trends || 0,
+                'risk-level': summary.risk_level || 'MEDIUM'
+            };
             
-            // 리스크 레벨 설정
-            const riskLevel = document.getElementById('riskLevel');
-            if (summary.market_sentiment === 'POSITIVE') {
-                riskLevel.textContent = '낮음';
-                riskLevel.className = 'stat-value sentiment-positive';
-            } else if (summary.market_sentiment === 'NEGATIVE') {
-                riskLevel.textContent = '높음';
-                riskLevel.className = 'stat-value sentiment-negative';
-            } else {
-                riskLevel.textContent = '보통';
-                riskLevel.className = 'stat-value sentiment-neutral';
-            }
+            Object.keys(stats).forEach(key => {
+                const element = document.getElementById(key);
+                if (element) {
+                    if (key === 'risk-level') {
+                        element.textContent = stats[key];
+                        element.className = `badge ${getRiskBadgeColor(stats[key])}`;
+                    } else {
+                        element.textContent = stats[key];
+                    }
+                }
+            });
         }
 
         // 트렌딩 키워드 업데이트
         function updateTrendingKeywords(keywords) {
             const container = document.getElementById('trendingKeywords');
-            container.innerHTML = '';
+            if (!container) return;
             
             if (!keywords || keywords.length === 0) {
-                container.innerHTML = '<p class="text-muted">트렌딩 키워드가 없습니다.</p>';
+                container.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>트렌딩 키워드가 없습니다.</strong><br>
+                        <small>데이터 수집을 시작하면 트렌딩 키워드를 확인할 수 있습니다.</small>
+                    </div>
+                `;
                 return;
             }
             
-            keywords.forEach(keyword => {
-                const keywordElement = document.createElement('span');
-                keywordElement.className = `keyword-tag ${keyword.trend === 'up' ? 'trending' : 'declining'}`;
-                keywordElement.innerHTML = `
-                    ${keyword.keyword} 
-                    <span class="badge bg-${keyword.trend === 'up' ? 'success' : 'danger'}">
-                        ${keyword.trend === 'up' ? '+' : ''}${keyword.change_rate.toFixed(1)}%
-                    </span>
+            let html = '<div class="row">';
+            keywords.slice(0, 8).forEach(keyword => {
+                const changeRate = keyword.change_rate || 0;
+                const changeClass = changeRate > 0 ? 'text-success' : changeRate < 0 ? 'text-danger' : 'text-muted';
+                const changeIcon = changeRate > 0 ? 'fa-arrow-up' : changeRate < 0 ? 'fa-arrow-down' : 'fa-minus';
+                
+                html += `
+                    <div class="col-md-3 mb-2">
+                        <div class="trend-card">
+                            <h6>${keyword.keyword}</h6>
+                            <p class="mb-1 ${changeClass}">
+                                <i class="fas ${changeIcon}"></i>
+                                ${changeRate > 0 ? '+' : ''}${changeRate.toFixed(1)}%
+                            </p>
+                            <small class="text-muted">${keyword.trend_type || 'N/A'}</small>
+                        </div>
+                    </div>
                 `;
-                container.appendChild(keywordElement);
             });
+            html += '</div>';
+            
+            container.innerHTML = html;
         }
 
-        // 시장 감정 분석 업데이트
+        // 시장 감정 업데이트
         function updateMarketSentiment(sentiment) {
-            const container = document.getElementById('marketSentimentAnalysis');
+            const container = document.getElementById('marketSentiment');
+            if (!container) return;
             
-            if (!sentiment) {
-                container.innerHTML = '<p class="text-muted">시장 감정 데이터가 없습니다.</p>';
+            if (!sentiment || Object.keys(sentiment).length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>시장 감정 데이터가 없습니다.</strong><br>
+                        <small>데이터 수집을 시작하면 시장 감정을 확인할 수 있습니다.</small>
+                    </div>
+                `;
                 return;
             }
+            
+            const overallSentiment = sentiment.overall_sentiment || 0;
+            const sectorSentiments = sentiment.sector_sentiments || {};
             
             let html = `
                 <div class="row">
                     <div class="col-md-6">
-                        <h6>전체 감정</h6>
-                        <div class="correlation-score ${getSentimentClass(sentiment.overall_sentiment)}">
-                            ${(sentiment.overall_sentiment * 100).toFixed(1)}%
+                        <h6><i class="fas fa-chart-line"></i> 전체 시장 감정</h6>
+                        <div class="sentiment-score ${getSentimentClass(overallSentiment)}">
+                            ${(overallSentiment * 100).toFixed(1)}%
                         </div>
-                        <p>리스크 레벨: <span class="badge bg-${getRiskBadgeColor(sentiment.risk_level)}">${sentiment.risk_level}</span></p>
+                        <p class="mb-0"><small>${getSentimentLevel(overallSentiment)}</small></p>
                     </div>
                     <div class="col-md-6">
-                        <h6>섹터별 감정</h6>
+                        <h6><i class="fas fa-industry"></i> 섹터별 감정</h6>
             `;
             
-            if (sentiment.sector_sentiments) {
-                Object.entries(sentiment.sector_sentiments).forEach(([sector, data]) => {
+            if (Object.keys(sectorSentiments).length > 0) {
+                Object.entries(sectorSentiments).slice(0, 4).forEach(([sector, data]) => {
+                    const score = data.score || 0;
                     html += `
                         <div class="mb-2">
-                            <strong>${sector}:</strong> 
-                            <span class="${getSentimentClass(data.score)}">${(data.score * 100).toFixed(1)}%</span>
-                            <span class="badge bg-${getSentimentBadgeColor(data.level)}">${data.level}</span>
+                            <strong>${sector}:</strong>
+                            <span class="badge ${getSentimentBadgeColor(score)}">
+                                ${(score * 100).toFixed(1)}%
+                            </span>
                         </div>
                     `;
                 });
+            } else {
+                html += '<p class="text-muted"><small>섹터별 데이터가 없습니다.</small></p>';
             }
             
             html += '</div></div>';
@@ -632,11 +821,12 @@
         // 투자 신호 로드
         async function loadInvestmentSignals() {
             const container = document.getElementById('investmentSignals');
-            container.innerHTML = '<p class="text-muted">투자 신호를 로드 중...</p>';
+            if (!container) return;
+            
+            container.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">투자 신호를 로드 중...</p></div>';
             
             try {
-                // 주요 종목들의 투자 신호 수집
-                const stocks = ['005930', '000660', '035420', '035720', '051910'];
+                const stocks = ['005930', '000660', '035420', '035720', '051910', '006400'];
                 const signals = [];
                 
                 for (const stock of stocks) {
@@ -652,44 +842,54 @@
                 }
                 
                 if (signals.length === 0) {
-                    container.innerHTML = '<p class="text-muted">투자 신호가 없습니다.</p>';
+                    container.innerHTML = `
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>투자 신호가 없습니다.</strong><br>
+                            <small>데이터 수집을 시작하면 투자 신호를 확인할 수 있습니다.</small>
+                        </div>
+                    `;
                     return;
                 }
                 
-                let html = '';
+                let html = '<div class="row">';
                 signals.forEach(signal => {
                     const signalClass = signal.overall_signal === 'BUY' ? 'signal-buy' : 
                                       signal.overall_signal === 'SELL' ? 'signal-sell' : 'signal-hold';
                     
                     html += `
-                        <div class="trend-card ${signalClass}">
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <h6>${signal.stock_code}</h6>
-                                    <p class="mb-1">신호: <strong>${signal.overall_signal}</strong></p>
-                                    <p class="mb-1">신뢰도: ${(signal.confidence * 100).toFixed(1)}%</p>
-                                </div>
-                                <div class="col-md-6">
-                                    <small>신호 수: ${signal.signals.length}</small><br>
-                                    <small>업데이트: ${new Date(signal.timestamp).toLocaleString()}</small>
-                                </div>
+                        <div class="col-md-6 mb-3">
+                            <div class="trend-card ${signalClass}">
+                                <h6>${signal.stock_code}</h6>
+                                <p class="mb-1">신호: <strong>${signal.overall_signal}</strong></p>
+                                <p class="mb-1">신뢰도: ${(signal.confidence * 100).toFixed(1)}%</p>
+                                <p class="mb-0">점수: ${signal.signal_score?.toFixed(2) || 'N/A'}</p>
                             </div>
                         </div>
                     `;
                 });
+                html += '</div>';
                 
                 container.innerHTML = html;
                 
             } catch (error) {
                 console.error('투자 신호 로드 오류:', error);
-                container.innerHTML = '<p class="text-danger">투자 신호 로드 중 오류가 발생했습니다.</p>';
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-times-circle"></i>
+                        <strong>투자 신호 로드 중 오류가 발생했습니다.</strong><br>
+                        <small>${error.message}</small>
+                    </div>
+                `;
             }
         }
 
         // 시장 상황별 투자 전략 로드
         async function loadMarketStrategyAnalysis() {
             const container = document.getElementById('marketStrategyAnalysis');
-            container.innerHTML = '<p class="text-muted">시장 상황을 분석 중...</p>';
+            if (!container) return;
+            
+            container.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">시장 상황을 분석 중...</p></div>';
             
             try {
                 // 시장 상황 조회
@@ -697,13 +897,19 @@
                 const marketData = await marketResponse.json();
                 
                 if (marketData.error) {
-                    container.innerHTML = '<p class="text-danger">시장 상황 분석 실패</p>';
+                    container.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>시장 상황 분석 실패</strong><br>
+                            <small>${marketData.error}</small>
+                        </div>
+                    `;
                     return;
                 }
                 
                 const condition = marketData.condition;
                 const description = marketData.description;
-                const strategy = marketData.strategy;
+                const strategy = marketData.strategy || {};
                 
                 // 시장 상황별 전략 조회
                 const strategyResponse = await fetch(`/api/market-strategy/${condition}`);
@@ -729,29 +935,37 @@
                 `;
                 
                 if (!strategyData.error) {
-                    const riskManagement = strategyData.risk_management;
-                    const marketTiming = strategyData.market_timing;
+                    const riskManagement = strategyData.risk_management || {};
+                    const marketTiming = strategyData.market_timing || {};
                     
                     html += `
                         <div class="row mt-3">
                             <div class="col-md-6">
                                 <h6><i class="fas fa-shield-alt"></i> 리스크 관리</h6>
                                 <ul class="list-unstyled">
-                                    <li><strong>포지션 크기:</strong> ${riskManagement.position_size}</li>
-                                    <li><strong>손절:</strong> ${riskManagement.stop_loss}</li>
-                                    <li><strong>익절:</strong> ${riskManagement.take_profit}</li>
-                                    <li><strong>중점:</strong> ${riskManagement.focus}</li>
+                                    <li><strong>포지션 크기:</strong> ${riskManagement.position_size || 'N/A'}</li>
+                                    <li><strong>손절:</strong> ${riskManagement.stop_loss || 'N/A'}</li>
+                                    <li><strong>익절:</strong> ${riskManagement.take_profit || 'N/A'}</li>
+                                    <li><strong>중점:</strong> ${riskManagement.focus || 'N/A'}</li>
                                 </ul>
                             </div>
                             <div class="col-md-6">
                                 <h6><i class="fas fa-clock"></i> 시장 타이밍</h6>
                                 <ul class="list-unstyled">
-                                    <li><strong>진입 전략:</strong> ${marketTiming.entry_strategy}</li>
-                                    <li><strong>청산 전략:</strong> ${marketTiming.exit_strategy}</li>
-                                    <li><strong>리밸런싱:</strong> ${marketTiming.rebalancing}</li>
-                                    <li><strong>주의사항:</strong> ${marketTiming.caution}</li>
+                                    <li><strong>진입 전략:</strong> ${marketTiming.entry_strategy || 'N/A'}</li>
+                                    <li><strong>청산 전략:</strong> ${marketTiming.exit_strategy || 'N/A'}</li>
+                                    <li><strong>리밸런싱:</strong> ${marketTiming.rebalancing || 'N/A'}</li>
+                                    <li><strong>주의사항:</strong> ${marketTiming.caution || 'N/A'}</li>
                                 </ul>
                             </div>
+                        </div>
+                    `;
+                } else {
+                    html += `
+                        <div class="alert alert-warning mt-3">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>전략 데이터 로드 실패</strong><br>
+                            <small>${strategyData.error}</small>
                         </div>
                     `;
                 }
@@ -760,28 +974,42 @@
                 
             } catch (error) {
                 console.error('시장 전략 분석 로드 오류:', error);
-                container.innerHTML = '<p class="text-danger">시장 전략 분석 로드 중 오류가 발생했습니다.</p>';
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-times-circle"></i>
+                        <strong>시장 전략 분석 로드 중 오류가 발생했습니다.</strong><br>
+                        <small>${error.message}</small>
+                    </div>
+                `;
             }
         }
 
         // 포트폴리오 추천 로드
         async function loadPortfolioRecommendation() {
             const container = document.getElementById('portfolioRecommendation');
-            container.innerHTML = '<p class="text-muted">포트폴리오 추천을 생성 중...</p>';
+            if (!container) return;
+            
+            container.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">포트폴리오 추천을 생성 중...</p></div>';
             
             try {
                 const response = await fetch('/api/portfolio-recommendation');
                 const data = await response.json();
                 
                 if (data.error) {
-                    container.innerHTML = '<p class="text-danger">포트폴리오 추천 생성 실패</p>';
+                    container.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>포트폴리오 추천 생성 실패</strong><br>
+                            <small>${data.error}</small>
+                        </div>
+                    `;
                     return;
                 }
                 
-                const marketCondition = data.market_condition;
-                const allocation = data.portfolio_allocation;
-                const recommendedStocks = data.recommended_stocks;
-                const riskManagement = data.risk_management;
+                const marketCondition = data.market_condition || 'UNKNOWN';
+                const allocation = data.portfolio_allocation || {};
+                const recommendedStocks = data.recommended_stocks || {};
+                const riskManagement = data.risk_management || {};
                 
                 let html = `
                     <div class="row">
@@ -804,11 +1032,11 @@
                                     <h6 class="card-title"><i class="fas fa-star"></i> 추천 종목</h6>
                                     <div class="mb-2">
                                         <strong>고상관관계:</strong><br>
-                                        ${recommendedStocks.high_correlation.map(stock => `<span class="badge bg-primary me-1">${stock}</span>`).join('')}
+                                        ${(recommendedStocks.high_correlation || []).map(stock => `<span class="badge bg-primary me-1">${stock}</span>`).join('') || '<small class="text-muted">데이터 없음</small>'}
                                     </div>
                                     <div class="mb-2">
                                         <strong>저상관관계:</strong><br>
-                                        ${recommendedStocks.low_correlation.map(stock => `<span class="badge bg-success me-1">${stock}</span>`).join('')}
+                                        ${(recommendedStocks.low_correlation || []).map(stock => `<span class="badge bg-success me-1">${stock}</span>`).join('') || '<small class="text-muted">데이터 없음</small>'}
                                     </div>
                                 </div>
                             </div>
@@ -818,13 +1046,13 @@
                                 <div class="card-body">
                                     <h6 class="card-title"><i class="fas fa-cog"></i> 리스크 관리</h6>
                                     <div class="mb-2">
-                                        <strong>포지션:</strong> ${riskManagement.position_size}
+                                        <strong>포지션:</strong> ${riskManagement.position_size || 'N/A'}
                                     </div>
                                     <div class="mb-2">
-                                        <strong>손절:</strong> ${riskManagement.stop_loss}
+                                        <strong>손절:</strong> ${riskManagement.stop_loss || 'N/A'}
                                     </div>
                                     <div class="mb-2">
-                                        <strong>익절:</strong> ${riskManagement.take_profit}
+                                        <strong>익절:</strong> ${riskManagement.take_profit || 'N/A'}
                                     </div>
                                 </div>
                             </div>
@@ -836,21 +1064,35 @@
                 
             } catch (error) {
                 console.error('포트폴리오 추천 로드 오류:', error);
-                container.innerHTML = '<p class="text-danger">포트폴리오 추천 로드 중 오류가 발생했습니다.</p>';
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-times-circle"></i>
+                        <strong>포트폴리오 추천 로드 중 오류가 발생했습니다.</strong><br>
+                        <small>${error.message}</small>
+                    </div>
+                `;
             }
         }
 
         // 상관관계 분석 로드 (기존 함수 업데이트)
         async function loadCorrelationAnalysis() {
             const container = document.getElementById('correlationAnalysis');
-            container.innerHTML = '<p class="text-muted">시장 상관관계를 분석 중...</p>';
+            if (!container) return;
+            
+            container.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">시장 상관관계를 분석 중...</p></div>';
             
             try {
                 const response = await fetch('/api/correlation-analysis');
                 const data = await response.json();
                 
                 if (data.error) {
-                    container.innerHTML = '<p class="text-danger">상관관계 분석 실패</p>';
+                    container.innerHTML = `
+                        <div class="alert alert-warning">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <strong>상관관계 분석 실패</strong><br>
+                            <small>${data.error}</small>
+                        </div>
+                    `;
                     return;
                 }
                 
@@ -861,19 +1103,19 @@
                             <div class="row">
                                 <div class="col-md-4">
                                     <div class="text-center">
-                                        <div class="h4 text-danger">${data.high_correlation_count}</div>
+                                        <div class="h4 text-danger">${data.high_correlation_count || 0}</div>
                                         <small>높은 상관관계</small>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="text-center">
-                                        <div class="h4 text-warning">${data.medium_correlation_count}</div>
+                                        <div class="h4 text-warning">${data.medium_correlation_count || 0}</div>
                                         <small>중간 상관관계</small>
                                     </div>
                                 </div>
                                 <div class="col-md-4">
                                     <div class="text-center">
-                                        <div class="h4 text-success">${data.low_correlation_count}</div>
+                                        <div class="h4 text-success">${data.low_correlation_count || 0}</div>
                                         <small>낮은 상관관계</small>
                                     </div>
                                 </div>
@@ -883,11 +1125,11 @@
                             <h6><i class="fas fa-list"></i> 종목 분류</h6>
                             <div class="mb-2">
                                 <strong>높은 상관관계:</strong><br>
-                                ${data.high_correlation_stocks.map(stock => `<span class="badge bg-danger me-1">${stock}</span>`).join('')}
+                                ${(data.high_correlation_stocks || []).map(stock => `<span class="badge bg-danger me-1">${stock}</span>`).join('') || '<small class="text-muted">데이터 없음</small>'}
                             </div>
                             <div class="mb-2">
                                 <strong>낮은 상관관계:</strong><br>
-                                ${data.low_correlation_stocks.map(stock => `<span class="badge bg-success me-1">${stock}</span>`).join('')}
+                                ${(data.low_correlation_stocks || []).map(stock => `<span class="badge bg-success me-1">${stock}</span>`).join('') || '<small class="text-muted">데이터 없음</small>'}
                             </div>
                         </div>
                     </div>
@@ -933,20 +1175,36 @@
                             </div>
                         </div>
                     `;
+                } else {
+                    html += `
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>상세 분석 데이터가 없습니다.</strong><br>
+                            <small>데이터 수집을 시작하면 상세 분석 결과를 확인할 수 있습니다.</small>
+                        </div>
+                    `;
                 }
                 
                 container.innerHTML = html;
                 
             } catch (error) {
                 console.error('상관관계 분석 로드 오류:', error);
-                container.innerHTML = '<p class="text-danger">상관관계 분석 로드 중 오류가 발생했습니다.</p>';
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-times-circle"></i>
+                        <strong>상관관계 분석 로드 중 오류가 발생했습니다.</strong><br>
+                        <small>${error.message}</small>
+                    </div>
+                `;
             }
         }
 
         // 시장 적응 투자 신호 로드
         async function loadMarketAdaptiveSignals() {
             const container = document.getElementById('marketAdaptiveSignals');
-            container.innerHTML = '<p class="text-muted">시장 적응 신호를 생성 중...</p>';
+            if (!container) return;
+            
+            container.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">시장 적응 신호를 생성 중...</p></div>';
             
             try {
                 // 주요 종목들의 시장 적응 신호 수집
@@ -966,7 +1224,13 @@
                 }
                 
                 if (signals.length === 0) {
-                    container.innerHTML = '<p class="text-muted">시장 적응 신호가 없습니다.</p>';
+                    container.innerHTML = `
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            <strong>시장 적응 신호가 없습니다.</strong><br>
+                            <small>데이터 수집을 시작하면 시장 적응 신호를 확인할 수 있습니다.</small>
+                        </div>
+                    `;
                     return;
                 }
                 
@@ -1006,7 +1270,13 @@
                 
             } catch (error) {
                 console.error('시장 적응 신호 로드 오류:', error);
-                container.innerHTML = '<p class="text-danger">시장 적응 신호 로드 중 오류가 발생했습니다.</p>';
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="fas fa-times-circle"></i>
+                        <strong>시장 적응 신호 로드 중 오류가 발생했습니다.</strong><br>
+                        <small>${error.message}</small>
+                    </div>
+                `;
             }
         }
 
@@ -1067,7 +1337,7 @@
 
         // 유틸리티 함수들
         function showLoading(show) {
-            document.getElementById('loading').style.display = show ? 'block' : 'none';
+            document.getElementById('loading').style.display = show ? 'flex' : 'none';
         }
 
         function showAlert(message, type) {
