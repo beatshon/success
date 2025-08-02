@@ -393,7 +393,7 @@ class StockNewsAnalyzer:
         
         data = []
         for analysis in stock_analysis.values():
-            # 뉴스 링크를 문자열로 변환 (최대 3개)
+            # 뉴스 제목과 링크를 문자열로 변환 (최대 3개)
             recent_links_str = " | ".join(analysis.recent_news_links[:3]) if analysis.recent_news_links else ""
             
             data.append({

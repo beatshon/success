@@ -255,14 +255,21 @@ class SimpleNewsDashboard:
             analysis_results = []
             for _, row in df.iterrows():
                 try:
-                    # 뉴스 링크 파싱
-                    recent_links = []
+                    # 뉴스 제목과 링크 파싱
+                    recent_news = []
                     if "recent_news_links" in row and pd.notna(row["recent_news_links"]):
                         links_str = str(row["recent_news_links"]).strip()
                         if links_str and links_str != "nan" and links_str != "":
-                            recent_links = [link.strip() for link in links_str.split(" | ") if link.strip()]
+                            news_items = [item.strip() for item in links_str.split(" | ") if item.strip()]
+                            for news_item in news_items:
+                                if "|" in news_item:
+                                    title, link = news_item.split("|", 1)
+                                    recent_news.append({"title": title.strip(), "link": link.strip()})
+                                else:
+                                    # 기존 형식 (링크만 있는 경우)
+                                    recent_news.append({"title": f"뉴스 {len(recent_news)+1}", "link": news_item})
                             stock_name = str(row["stock_name"])
-                            logger.info(f"파싱된 링크: {stock_name} - {len(recent_links)}개 링크")
+                            logger.info(f"파싱된 뉴스: {stock_name} - {len(recent_news)}개 뉴스")
                     
                     analysis_results.append({
                         "stock_code": str(row["stock_code"]),
