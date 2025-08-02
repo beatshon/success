@@ -15,7 +15,7 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from loguru import logger
 import yfinance as yf
-import talib
+import pandas_ta as ta
 
 @dataclass
 class TechnicalSignal:
