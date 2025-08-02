@@ -523,13 +523,27 @@
 
         // 페이지 로드 시 초기화
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('네이버 트렌드 대시보드 초기화 시작');
+            
+            // 차트 초기화
             initializeCharts();
+            
+            // 기본 차트 타입을 감정분포로 설정
+            currentChartType = 'sentiment';
+            document.getElementById('chartTypeDisplay').textContent = '감정분포';
+            
+            // 초기 데이터 로드
             loadDashboardData();
+            loadInvestmentSignals();
             loadMarketStrategyAnalysis();
             loadPortfolioRecommendation();
             loadCorrelationAnalysis();
             loadMarketAdaptiveSignals();
+            
+            // 자동 업데이트 시작
             startAutoUpdate();
+            
+            console.log('네이버 트렌드 대시보드 초기화 완료');
         });
 
         // 차트 초기화
@@ -663,6 +677,15 @@
                 
                 let positive = 0, neutral = 0, negative = 0;
                 
+                // API 응답 구조에 맞게 수정
+                if (data.overall_sentiment !== undefined) {
+                    const overallSentiment = data.overall_sentiment || 0;
+                    if (overallSentiment > 0.1) positive = 1;
+                    else if (overallSentiment < -0.1) negative = 1;
+                    else neutral = 1;
+                }
+                
+                // 섹터별 감정 분석
                 if (data.sector_sentiments) {
                     Object.values(data.sector_sentiments).forEach(sector => {
                         const score = sector.score || 0;
@@ -684,6 +707,11 @@
                 
             } catch (error) {
                 console.error('감정 차트 업데이트 오류:', error);
+                // 오류 시 가상 데이터로 차트 업데이트
+                if (sentimentChart) {
+                    sentimentChart.data.datasets[0].data = [3, 2, 1];
+                    sentimentChart.update();
+                }
             }
         }
 
@@ -769,7 +797,16 @@
                 
                 updateStats(data.summary || {});
                 updateTrendingKeywords(data.trending_keywords || []);
-                updateMarketSentiment(data.market_sentiment || {});
+                
+                // 시장 감정 데이터 별도 로드
+                try {
+                    const sentimentResponse = await fetch('/api/market-sentiment');
+                    const sentimentData = await sentimentResponse.json();
+                    updateMarketSentiment(sentimentData);
+                } catch (error) {
+                    console.error('시장 감정 데이터 로드 오류:', error);
+                    updateMarketSentiment({});
+                }
                 
                 // 차트 업데이트
                 updateCharts();
@@ -848,7 +885,7 @@
 
         // 시장 감정 업데이트
         function updateMarketSentiment(sentiment) {
-            const container = document.getElementById('marketSentiment');
+            const container = document.getElementById('marketSentimentAnalysis');
             if (!container) return;
             
             if (!sentiment || Object.keys(sentiment).length === 0) {
@@ -898,6 +935,15 @@
             
             html += '</div></div>';
             container.innerHTML = html;
+        }
+
+        // 감정 수준 반환 함수 추가
+        function getSentimentLevel(score) {
+            if (score > 0.3) return '매우 긍정적';
+            if (score > 0.1) return '긍정적';
+            if (score < -0.3) return '매우 부정적';
+            if (score < -0.1) return '부정적';
+            return '중립적';
         }
 
         // 투자 신호 로드

@@ -55,11 +55,7 @@ class NaverTrendServer:
         
     def _setup_routes(self):
         """라우트 설정"""
-        @self.app.route('/')
-        def index():
-            """메인 페이지"""
-            return render_template('naver_trend_dashboard.html')
-
+        # 헬스 체크를 먼저 정의
         @self.app.route('/api/health', methods=['GET'])
         def health_check():
             """헬스 체크"""
@@ -69,6 +65,12 @@ class NaverTrendServer:
                 'data_collection_running': self.analyzer.analysis_running if self.analyzer else False,
                 'timestamp': datetime.now().isoformat()
             })
+
+        # 메인 페이지는 마지막에 정의
+        @self.app.route('/')
+        def index():
+            """메인 페이지"""
+            return render_template('naver_trend_dashboard.html')
 
         @self.app.route('/api/naver-trends', methods=['GET'])
         def get_naver_trends():
@@ -172,6 +174,10 @@ class NaverTrendServer:
         def get_market_correlation(stock_code):
             """시장 상관관계 분석 API"""
             try:
+                # 가상 데이터 강제 생성
+                if not self.analyzer.trend_data:
+                    self.analyzer._generate_virtual_trend_data()
+                
                 # 가상 시장 데이터 생성
                 market_data = {
                     'KOSPI': {
@@ -192,6 +198,10 @@ class NaverTrendServer:
         def get_market_condition():
             """시장 상황 판단 API"""
             try:
+                # 가상 데이터 강제 생성
+                if not self.analyzer.trend_data:
+                    self.analyzer._generate_virtual_trend_data()
+                
                 # 가상 시장 데이터 생성
                 market_data = {
                     'KOSPI': {
@@ -304,33 +314,34 @@ class NaverTrendServer:
                 logger.error(f"상관관계 분석 실패: {e}")
                 return jsonify({'error': str(e)}), 500
 
-        # 데이터 수집 API
+        # 즉시 데이터 수집 API
         @self.app.route('/api/collect-data-now', methods=['GET'])
         def collect_data_now():
-            """즉시 데이터 수집"""
+            """즉시 데이터 수집 API"""
             try:
                 # 가상 데이터 강제 생성
                 if not self.analyzer.trend_data:
                     self.analyzer._generate_virtual_trend_data()
                 
+                # 실시간 데이터 수집 실행
+                self.analyzer.collect_real_time_data()
+                
                 return jsonify({
-                    'status': 'success',
-                    'message': '데이터 수집 완료',
+                    'message': '데이터 수집이 완료되었습니다.',
                     'timestamp': datetime.now().isoformat()
                 })
                 
             except Exception as e:
-                logger.error(f"데이터 수집 실패: {e}")
+                logger.error(f"즉시 데이터 수집 실패: {e}")
                 return jsonify({'error': str(e)}), 500
 
-        # 분석 시작/중지 API
+        # 분석 시작 API
         @self.app.route('/api/start-analysis', methods=['GET'])
         def start_analysis():
-            """연속 분석 시작"""
+            """분석 시작 API"""
             try:
                 self.analyzer.start_continuous_analysis()
                 return jsonify({
-                    'status': 'success',
                     'message': '연속 분석이 시작되었습니다.',
                     'timestamp': datetime.now().isoformat()
                 })
@@ -339,13 +350,13 @@ class NaverTrendServer:
                 logger.error(f"분석 시작 실패: {e}")
                 return jsonify({'error': str(e)}), 500
 
+        # 분석 중지 API
         @self.app.route('/api/stop-analysis', methods=['GET'])
         def stop_analysis():
-            """연속 분석 중지"""
+            """분석 중지 API"""
             try:
                 self.analyzer.stop_continuous_analysis()
                 return jsonify({
-                    'status': 'success',
                     'message': '연속 분석이 중지되었습니다.',
                     'timestamp': datetime.now().isoformat()
                 })
@@ -373,6 +384,12 @@ class NaverTrendServer:
         try:
             logger.info("네이버 트렌드 분석기 초기화 시작")
             self.analyzer = NaverTrendAnalyzer()
+            
+            # 가상 데이터 강제 생성
+            if not self.analyzer.trend_data:
+                self.analyzer._generate_virtual_trend_data()
+                logger.info("가상 데이터 생성 완료")
+            
             logger.info("네이버 트렌드 분석기 초기화 완료")
         except Exception as e:
             logger.error(f"트렌드 분석기 초기화 실패: {e}")
