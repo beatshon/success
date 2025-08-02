@@ -540,6 +540,9 @@
             loadCorrelationAnalysis();
             loadMarketAdaptiveSignals();
             
+            // 차트 업데이트 추가
+            updateCharts();
+            
             // 자동 업데이트 시작
             startAutoUpdate();
             
@@ -798,6 +801,9 @@
                 updateStats(data.summary || {});
                 updateTrendingKeywords(data.trending_keywords || []);
                 
+                // 투자 신호 로드 추가
+                await loadInvestmentSignals();
+                
                 // 시장 감정 데이터 별도 로드
                 try {
                     const sentimentResponse = await fetch('/api/market-sentiment');
@@ -946,10 +952,53 @@
             return '중립적';
         }
 
-        // 투자 신호 로드
-        async function loadInvestmentSignals() {
+        // 투자 신호 업데이트
+        async function updateInvestmentSignals(signals) {
             const container = document.getElementById('investmentSignals');
             if (!container) return;
+            
+            let html = '<div class="row">';
+            signals.forEach(signal => {
+                const signalClass = signal.signal === '매수' ? 'success' : 
+                                  signal.signal === '매도' ? 'danger' : 'warning';
+                const confidencePercent = Math.round(signal.confidence * 100);
+                
+                html += `
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card h-100 border-${signalClass}">
+                            <div class="card-header bg-${signalClass} text-white">
+                                <h6 class="mb-0">
+                                    <strong>${signal.stock_name || signal.stock_code}</strong>
+                                    <small class="float-right">${signal.stock_code}</small>
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge badge-${signalClass} badge-pill">${signal.signal}</span>
+                                    <span class="text-muted">신뢰도: ${confidencePercent}%</span>
+                                </div>
+                                <div class="small text-muted">
+                                    <div>가격: ${signal.price?.toLocaleString() || 'N/A'}원</div>
+                                    <div>변화율: ${signal.change_rate ? (signal.change_rate * 100).toFixed(2) + '%' : 'N/A'}</div>
+                                    <div>거래량: ${signal.volume?.toLocaleString() || 'N/A'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            container.innerHTML = html;
+        }
+
+        // 투자 신호 로드
+        async function loadInvestmentSignals() {
+            console.log('loadInvestmentSignals 함수가 호출되었습니다!'); // 함수 호출 확인
+            const container = document.getElementById('investmentSignals');
+            if (!container) {
+                console.log('investmentSignals 컨테이너를 찾을 수 없습니다.');
+                return;
+            }
             
             container.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">투자 신호를 로드 중...</p></div>';
             
@@ -961,6 +1010,7 @@
                     try {
                         const response = await fetch(`/api/stock-signals/${stock}`);
                         const data = await response.json();
+                        console.log(`API 응답 (${stock}):`, data); // 디버깅 로그 추가
                         if (!data.error && data.overall_signal) {
                             signals.push(data);
                         }
@@ -968,6 +1018,8 @@
                         console.error(`투자 신호 로드 실패 (${stock}):`, error);
                     }
                 }
+                
+                console.log('최종 신호 데이터:', signals); // 디버깅 로그 추가
                 
                 if (signals.length === 0) {
                     container.innerHTML = `
@@ -985,10 +1037,13 @@
                     const signalClass = signal.overall_signal === 'BUY' ? 'signal-buy' : 
                                       signal.overall_signal === 'SELL' ? 'signal-sell' : 'signal-hold';
                     
+                    console.log(`신호 렌더링: ${signal.stock_code}, 종목명: ${signal.stock_name}`); // 디버깅 로그 추가
+                    
                     html += `
                         <div class="col-md-6 mb-3">
                             <div class="trend-card ${signalClass}">
-                                <h6>${signal.stock_code}</h6>
+                                <h6>${signal.stock_name || signal.stock_code}</h6>
+                                <small class="text-muted">${signal.stock_code}</small>
                                 <p class="mb-1">신호: <strong>${signal.overall_signal}</strong></p>
                                 <p class="mb-1">신뢰도: ${(signal.confidence * 100).toFixed(1)}%</p>
                                 <p class="mb-0">점수: ${signal.signal_score?.toFixed(2) || 'N/A'}</p>
@@ -1035,9 +1090,9 @@
                     return;
                 }
                 
-                const condition = marketData.condition;
-                const description = marketData.description;
-                const strategy = marketData.strategy || {};
+                const condition = marketData.condition || marketData.market_condition || 'sideways';
+                const description = marketData.description || '시장 상황 분석 중...';
+                const strategy = marketData.strategy || marketData;
                 
                 // 시장 상황별 전략 조회
                 const strategyResponse = await fetch(`/api/market-strategy/${condition}`);
@@ -1374,7 +1429,8 @@
                         <div class="trend-card ${signalClass}">
                             <div class="row">
                                 <div class="col-md-4">
-                                    <h6>${signal.stock_code}</h6>
+                                    <h6>${signal.stock_name || signal.stock_code}</h6>
+                                    <small class="text-muted">${signal.stock_code}</small>
                                     <p class="mb-1">신호: <strong>${signal.overall_signal}</strong></p>
                                     <p class="mb-1">신뢰도: ${(signal.confidence * 100).toFixed(1)}%</p>
                                     <p class="mb-1">시장 상황: <span class="badge bg-info">${marketCondition}</span></p>
@@ -1451,12 +1507,21 @@
 
         async function collectDataNow() {
             try {
+                console.log('즉시 데이터 수집 시작...');
                 showLoading(true);
                 const response = await fetch('/api/collect-data-now');
+                console.log('API 응답 상태:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
+                console.log('API 응답 데이터:', data);
                 showAlert(data.message || '데이터 수집이 완료되었습니다.', 'success');
                 loadDashboardData(); // 데이터 새로고침
             } catch (error) {
+                console.error('데이터 수집 에러:', error);
                 showAlert('즉시 데이터 수집 실패: ' + error.message, 'danger');
             } finally {
                 showLoading(false);

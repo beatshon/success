@@ -30,8 +30,8 @@ class NaverTrendServer:
         self.port = port
         self.analyzer = None
         
-        # 새로운 Flask 앱 생성
-        self.app = Flask(__name__, 
+        # 새로운 Flask 앱 생성 (고유한 이름 사용)
+        self.app = Flask('naver_trend_server', 
                         template_folder='templates',
                         static_folder='static')
         
