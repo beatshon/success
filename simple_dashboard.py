@@ -254,15 +254,23 @@ class SimpleNewsDashboard:
             analysis_results = []
             for _, row in df.iterrows():
                 try:
-                    analysis_results.append({
-                        "stock_code": str(row["stock_code"]),
-                        "stock_name": str(row["stock_name"]),
-                        "news_count": int(row["news_count"]),
-                        "investment_score": float(row["investment_score"]),
-                        "sentiment_score": float(row["sentiment_score"]),
-                        "recommendation": str(row["recommendation"]),
-                        "risk_level": str(row["risk_level"])
-                    })
+                                    # 뉴스 링크 파싱
+                recent_links = []
+                if "recent_news_links" in row and pd.notna(row["recent_news_links"]):
+                    links_str = str(row["recent_news_links"])
+                    if links_str and links_str != "nan":
+                        recent_links = links_str.split(" | ")
+                
+                analysis_results.append({
+                    "stock_code": str(row["stock_code"]),
+                    "stock_name": str(row["stock_name"]),
+                    "news_count": int(row["news_count"]),
+                    "investment_score": float(row["investment_score"]),
+                    "sentiment_score": float(row["sentiment_score"]),
+                    "recommendation": str(row["recommendation"]),
+                    "risk_level": str(row["risk_level"]),
+                    "recent_news_links": recent_links
+                })
                 except Exception as row_error:
                     logger.error(f"행 처리 실패: {row_error}, 행: {row}")
                     continue
