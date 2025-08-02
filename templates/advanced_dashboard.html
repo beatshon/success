@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>고급 주식 뉴스 분석 대시보드</title>
+    <title>📈 실시간 주식 뉴스 분석 대시보드</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
     <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
@@ -99,13 +99,13 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1><i class="fas fa-chart-line"></i> 고급 주식 뉴스 분석 대시보드</h1>
-            <p style="text-align: center; color: #7f8c8d;">AI 기반 실시간 주식 분석 및 투자 추천 시스템</p>
+            <h1><i class="fas fa-chart-line"></i> 📈 실시간 주식 뉴스 분석 대시보드</h1>
+            <p style="text-align: center; color: #7f8c8d;">뉴스 감정 분석을 통한 스마트 투자 인사이트</p>
         </div>
 
         <div class="grid">
             <div class="card">
-                <h2><i class="fas fa-chart-pie"></i> 시장 요약</h2>
+                <h2><i class="fas fa-chart-pie"></i> 📊 시장 현황 요약</h2>
                 <div class="summary-grid" id="summary-grid">
                     <div class="loading">
                         <i class="fas fa-spinner fa-spin"></i>
@@ -115,7 +115,7 @@
             </div>
 
             <div class="card">
-                <h2><i class="fas fa-trophy"></i> 투자점수 상위 종목</h2>
+                <h2><i class="fas fa-trophy"></i> 🏆 투자 추천 상위 종목</h2>
                 <div id="top-stocks">
                     <div class="loading">
                         <i class="fas fa-spinner fa-spin"></i>
@@ -127,14 +127,14 @@
 
         <div class="grid">
             <div class="card">
-                <h2><i class="fas fa-bar-chart"></i> 투자점수 분포</h2>
+                <h2><i class="fas fa-bar-chart"></i> 📈 종목별 투자 점수 분포</h2>
                 <div style="height: 300px;">
                     <canvas id="investmentScoresChart"></canvas>
                 </div>
             </div>
 
             <div class="card">
-                <h2><i class="fas fa-chart-donut"></i> 섹터별 성과</h2>
+                <h2><i class="fas fa-chart-donut"></i> 🏭 산업별 투자 성과</h2>
                 <div style="height: 300px;">
                     <canvas id="sectorPerformanceChart"></canvas>
                 </div>
@@ -175,19 +175,19 @@
             summaryGrid.innerHTML = `
                 <div class="summary-item">
                     <div class="summary-value">${summary.total_stocks || 0}</div>
-                    <div class="summary-label">분석 종목</div>
+                    <div class="summary-label">📊 분석 종목 수</div>
                 </div>
                 <div class="summary-item">
                     <div class="summary-value">${(summary.avg_investment_score || 0).toFixed(1)}</div>
-                    <div class="summary-label">평균 점수</div>
+                    <div class="summary-label">📈 평균 투자 점수</div>
                 </div>
                 <div class="summary-item">
                     <div class="summary-value">${summary.high_score_stocks || 0}</div>
-                    <div class="summary-label">고점수 종목</div>
+                    <div class="summary-label">⭐ 우수 종목</div>
                 </div>
                 <div class="summary-item">
                     <div class="summary-value">${summary.top_performer || '-'}</div>
-                    <div class="summary-label">최고 성과</div>
+                    <div class="summary-label">🏆 최고 성과 종목</div>
                 </div>
             `;
         }
@@ -219,8 +219,8 @@
                     </div>
                     <div style="text-align: right; margin-left: 15px;">
                         <div style="font-size: 1.2em; font-weight: bold; color: #27ae60;">${stock.investment_score.toFixed(1)}</div>
-                        <div style="font-size: 0.8em; color: #7f8c8d;">${stock.recommendation}</div>
-                        <div style="font-size: 0.8em; color: #7f8c8d;">뉴스 ${stock.news_count}개</div>
+                        <div style="font-size: 0.8em; color: #7f8c8d;">💡 ${stock.recommendation}</div>
+                        <div style="font-size: 0.8em; color: #7f8c8d;">📰 관련 뉴스 ${stock.news_count}개</div>
                     </div>
                 </div>
             `).join('');
@@ -266,32 +266,72 @@
                         }
                     },
                     tooltip: {
-                        enabled: true,
-                        mode: 'index',
-                        intersect: false,
-                        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                        titleColor: '#ffffff',
-                        bodyColor: '#ffffff',
-                        borderColor: '#ffffff',
-                        borderWidth: 1,
-                        cornerRadius: 6,
-                        displayColors: true,
-                        callbacks: {
-                            label: function(context) {
-                                return context.label + ': ' + context.parsed.toFixed(1) + '점';
-                            }
-                        }
+                        enabled: false  // Chart.js 기본 tooltip 비활성화
                     }
                 }
             };
 
             console.log('Chart options:', chartOptions); // 디버깅용
+            console.log('Chart data:', data.data); // 디버깅용
 
-            new Chart(ctx, {
+            const chart = new Chart(ctx, {
                 type: data.type,
                 data: data.data,
                 options: chartOptions
             });
+
+            // 차트에 마우스 이벤트 추가
+            ctx.addEventListener('mousemove', function(e) {
+                const points = chart.getElementsAtEventForMode(e, 'nearest', { intersect: false }, true);
+                if (points.length) {
+                    const firstPoint = points[0];
+                    const label = chart.data.labels[firstPoint.index];
+                    const value = chart.data.datasets[firstPoint.datasetIndex].data[firstPoint.index];
+                    ctx.style.cursor = 'pointer';
+                    
+                    // 커스텀 툴팁 표시
+                    showCustomTooltip(e, label + ': ' + value.toFixed(1) + '점');
+                } else {
+                    ctx.style.cursor = 'default';
+                    hideCustomTooltip();
+                }
+            });
+
+            ctx.addEventListener('mouseleave', function() {
+                hideCustomTooltip();
+            });
+        }
+
+        function showCustomTooltip(event, text) {
+            let tooltip = document.getElementById('custom-tooltip');
+            if (!tooltip) {
+                tooltip = document.createElement('div');
+                tooltip.id = 'custom-tooltip';
+                tooltip.style.cssText = `
+                    position: absolute;
+                    background: rgba(0, 0, 0, 0.8);
+                    color: white;
+                    padding: 8px 12px;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    pointer-events: none;
+                    z-index: 1000;
+                    display: none;
+                `;
+                document.body.appendChild(tooltip);
+            }
+            
+            tooltip.textContent = text;
+            tooltip.style.left = (event.pageX + 10) + 'px';
+            tooltip.style.top = (event.pageY - 10) + 'px';
+            tooltip.style.display = 'block';
+        }
+
+        function hideCustomTooltip() {
+            const tooltip = document.getElementById('custom-tooltip');
+            if (tooltip) {
+                tooltip.style.display = 'none';
+            }
         }
 
         function getCanvasId(chartType) {

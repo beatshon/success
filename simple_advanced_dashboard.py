@@ -141,15 +141,15 @@ class SimpleAdvancedDashboard:
     def _get_recommendation(self, score: float) -> str:
         """투자점수 기반 추천"""
         if score >= 80:
-            return "강력매수"
+            return "🔥 강력 매수 추천"
         elif score >= 70:
-            return "매수"
+            return "📈 매수 추천"
         elif score >= 50:
-            return "관망"
+            return "👀 관망"
         elif score >= 30:
-            return "매도"
+            return "📉 매도 고려"
         else:
-            return "강력매도"
+            return "⚠️ 매도 추천"
     
     def _generate_chart_data(self, chart_type: str) -> Dict:
         """차트 데이터 생성"""
