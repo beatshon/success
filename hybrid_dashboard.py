@@ -10,7 +10,7 @@ from loguru import logger
 
 class HybridDashboard:
     def __init__(self):
-        self.app = Flask(__name__)
+        self.app = Flask(__name__, template_folder='templates')
         self.data_dir = "data/hybrid_analysis"
         self.setup_routes()
         logger.info("하이브리드 대시보드 초기화 완료")
