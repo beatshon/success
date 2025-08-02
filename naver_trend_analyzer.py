@@ -369,14 +369,24 @@ class NaverTrendAnalyzer:
         }
     
     def get_search_trend(self, keyword: str, period: str = "1month") -> Dict:
-        """검색 트렌드 조회"""
+        """네이버 검색 트렌드 조회"""
         try:
             url = f"{self.base_url}/datalab/search"
             
-            # 요청 데이터
+            # 기간 설정
+            end_date = datetime.now()
+            if period == "1week":
+                start_date = end_date - timedelta(days=7)
+            elif period == "1month":
+                start_date = end_date - timedelta(days=30)
+            elif period == "3months":
+                start_date = end_date - timedelta(days=90)
+            else:
+                start_date = end_date - timedelta(days=30)
+            
             data = {
-                "startDate": (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d"),
-                "endDate": datetime.now().strftime("%Y-%m-%d"),
+                "startDate": start_date.strftime("%Y-%m-%d"),
+                "endDate": end_date.strftime("%Y-%m-%d"),
                 "timeUnit": "date",
                 "keywordGroups": [
                     {
@@ -390,23 +400,48 @@ class NaverTrendAnalyzer:
             response.raise_for_status()
             
             result = response.json()
+            
+            # 데이터 정제 및 저장
+            trend_data = self._process_trend_data(result, keyword, TrendType.SEARCH)
+            self._save_trend_data(trend_data)
+            
             return result
             
         except Exception as e:
-            logger.error(f"검색 트렌드 조회 실패: {keyword} - {e}")
-            return None
-    
+            logger.error(f"검색 트렌드 조회 실패 ({keyword}): {e}")
+            handle_error(ErrorType.API_ERROR, ErrorLevel.WARNING, f"네이버 검색 트렌드 조회 실패: {e}")
+            return {"error": str(e)}
+
     def get_shopping_trend(self, keyword: str) -> Dict:
-        """쇼핑 트렌드 조회"""
+        """네이버 쇼핑 트렌드 조회"""
         try:
             url = f"{self.base_url}/datalab/shopping/categories"
             
-            # 요청 데이터
+            # 쇼핑 카테고리 매핑
+            category_mapping = {
+                "전기차": "50000000",  # 자동차
+                "스마트폰": "50000002",  # 디지털/가전
+                "노트북": "50000002",  # 디지털/가전
+                "게임": "50000003",  # 도서/문구
+                "의류": "50000001",  # 패션의류
+                "화장품": "50000004",  # 뷰티
+                "식품": "50000005",  # 식품
+                "가구": "50000006",  # 가구/인테리어
+                "스포츠": "50000007",  # 스포츠/레저
+                "유아용품": "50000008",  # 유아동/출산
+                "반려동물": "50000009",  # 반려동물용품
+            }
+            
+            category_id = category_mapping.get(keyword, "50000000")
+            
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=30)
+            
             data = {
-                "startDate": (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d"),
-                "endDate": datetime.now().strftime("%Y-%m-%d"),
+                "startDate": start_date.strftime("%Y-%m-%d"),
+                "endDate": end_date.strftime("%Y-%m-%d"),
                 "timeUnit": "date",
-                "category": keyword,
+                "category": category_id,
                 "device": "pc",
                 "gender": "",
                 "ages": []
@@ -416,12 +451,18 @@ class NaverTrendAnalyzer:
             response.raise_for_status()
             
             result = response.json()
+            
+            # 데이터 정제 및 저장
+            trend_data = self._process_trend_data(result, keyword, TrendType.SHOPPING)
+            self._save_trend_data(trend_data)
+            
             return result
             
         except Exception as e:
-            logger.error(f"쇼핑 트렌드 조회 실패: {keyword} - {e}")
-            return None
-    
+            logger.error(f"쇼핑 트렌드 조회 실패 ({keyword}): {e}")
+            handle_error(ErrorType.API_ERROR, ErrorLevel.WARNING, f"네이버 쇼핑 트렌드 조회 실패: {e}")
+            return {"error": str(e)}
+
     def get_news_sentiment(self, keyword: str) -> float:
         """뉴스 감정 분석"""
         try:
@@ -429,7 +470,7 @@ class NaverTrendAnalyzer:
             
             params = {
                 'query': keyword,
-                'display': 10,
+                'display': 100,
                 'start': 1,
                 'sort': 'date'
             }
@@ -439,36 +480,323 @@ class NaverTrendAnalyzer:
             
             result = response.json()
             
-            # 간단한 감정 분석 (키워드 기반)
-            positive_words = ['상승', '급등', '호재', '성장', '돌파', '신기록', '수익', '이익']
-            negative_words = ['하락', '급락', '악재', '손실', '폭락', '위험', '부실', '실패']
+            if 'items' not in result:
+                return 0.0
             
-            sentiment_score = 0.0
-            total_articles = len(result.get('items', []))
+            # 감정 분석 키워드
+            positive_words = [
+                '상승', '급등', '호재', '성장', '확대', '증가', '개발', '성공',
+                '돌파', '상향', '긍정', '낙관', '기대', '희망', '강세', '상향조정'
+            ]
             
-            for item in result.get('items', []):
+            negative_words = [
+                '하락', '급락', '악재', '감소', '축소', '실패', '위험', '부정',
+                '하향', '비관', '우려', '절망', '약세', '하향조정', '손실', '폭락'
+            ]
+            
+            total_score = 0.0
+            article_count = 0
+            
+            for item in result['items']:
                 title = item.get('title', '')
                 description = item.get('description', '')
                 content = f"{title} {description}"
                 
-                # 긍정/부정 키워드 카운트
+                # 감정 점수 계산
                 positive_count = sum(1 for word in positive_words if word in content)
                 negative_count = sum(1 for word in negative_words if word in content)
                 
-                if positive_count > negative_count:
-                    sentiment_score += 1
-                elif negative_count > positive_count:
-                    sentiment_score -= 1
+                if positive_count > 0 or negative_count > 0:
+                    score = (positive_count - negative_count) / (positive_count + negative_count)
+                    total_score += score
+                    article_count += 1
             
-            # 정규화 (-1 ~ 1)
-            if total_articles > 0:
-                sentiment_score = sentiment_score / total_articles
+            sentiment_score = total_score / article_count if article_count > 0 else 0.0
+            
+            # 데이터베이스에 저장
+            trend_data = TrendData(
+                keyword=keyword,
+                trend_type=TrendType.NEWS,
+                value=sentiment_score,
+                timestamp=datetime.now(),
+                sentiment_score=sentiment_score
+            )
+            self._save_trend_data(trend_data)
             
             return sentiment_score
             
         except Exception as e:
-            logger.error(f"뉴스 감정 분석 실패: {keyword} - {e}")
+            logger.error(f"뉴스 감정 분석 실패 ({keyword}): {e}")
+            handle_error(ErrorType.API_ERROR, ErrorLevel.WARNING, f"뉴스 감정 분석 실패: {e}")
             return 0.0
+
+    def _process_trend_data(self, api_result: Dict, keyword: str, trend_type: TrendType) -> TrendData:
+        """API 결과를 TrendData로 변환"""
+        try:
+            if 'results' not in api_result or not api_result['results']:
+                return None
+            
+            data_points = api_result['results'][0]['data']
+            
+            if not data_points:
+                return None
+            
+            # 최신 값과 이전 값 비교
+            current_value = data_points[-1]['ratio']
+            previous_value = data_points[-2]['ratio'] if len(data_points) > 1 else current_value
+            
+            # 변화율 계산
+            volume_change = ((current_value - previous_value) / previous_value * 100) if previous_value > 0 else 0
+            
+            # 모멘텀 계산 (최근 7일)
+            recent_values = [point['ratio'] for point in data_points[-7:]]
+            momentum_score = self._calculate_momentum(recent_values)
+            
+            # 변동성 계산
+            volatility = self._calculate_volatility(recent_values)
+            
+            # 감정 점수 (간접적 계산)
+            sentiment_score = 0.0
+            if volume_change > 0:
+                sentiment_score = min(volume_change / 10, 1.0)  # 최대 1.0
+            elif volume_change < 0:
+                sentiment_score = max(volume_change / 10, -1.0)  # 최소 -1.0
+            
+            return TrendData(
+                keyword=keyword,
+                trend_type=trend_type,
+                value=current_value,
+                timestamp=datetime.now(),
+                related_stocks=self.keyword_stock_mapping.get(keyword, []),
+                sentiment_score=sentiment_score,
+                volume_change=volume_change,
+                momentum_score=momentum_score,
+                volatility=volatility
+            )
+            
+        except Exception as e:
+            logger.error(f"트렌드 데이터 처리 실패: {e}")
+            return None
+
+    def _calculate_momentum(self, values: List[float]) -> float:
+        """모멘텀 점수 계산"""
+        if len(values) < 2:
+            return 0.0
+        
+        # 선형 회귀를 통한 기울기 계산
+        x = np.arange(len(values))
+        y = np.array(values)
+        
+        # 기울기 계산
+        slope = np.polyfit(x, y, 1)[0]
+        
+        # 정규화 (0~1 범위로)
+        max_value = max(values) if values else 1
+        normalized_slope = slope / max_value if max_value > 0 else 0
+        
+        return min(max(normalized_slope, -1), 1)  # -1 ~ 1 범위로 제한
+
+    def _calculate_volatility(self, values: List[float]) -> float:
+        """변동성 계산"""
+        if len(values) < 2:
+            return 0.0
+        
+        # 표준편차 계산
+        std_dev = np.std(values)
+        mean_value = np.mean(values)
+        
+        # 변동계수 (CV) 계산
+        cv = std_dev / mean_value if mean_value > 0 else 0
+        
+        return cv
+
+    def _save_trend_data(self, trend_data: TrendData):
+        """트렌드 데이터를 데이터베이스에 저장"""
+        if not trend_data:
+            return
+        
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT INTO trend_data 
+                (keyword, trend_type, value, timestamp, sentiment_score, volume_change, momentum_score, volatility)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                trend_data.keyword,
+                trend_data.trend_type.value,
+                trend_data.value,
+                trend_data.timestamp.isoformat(),
+                trend_data.sentiment_score,
+                trend_data.volume_change,
+                trend_data.momentum_score,
+                trend_data.volatility
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+            # 메모리에도 저장
+            if trend_data.keyword not in self.trend_data:
+                self.trend_data[trend_data.keyword] = []
+            self.trend_data[trend_data.keyword].append(trend_data)
+            
+        except Exception as e:
+            logger.error(f"트렌드 데이터 저장 실패: {e}")
+
+    def get_historical_trend_data(self, keyword: str, days: int = 30) -> List[TrendData]:
+        """과거 트렌드 데이터 조회"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=days)
+            
+            cursor.execute('''
+                SELECT keyword, trend_type, value, timestamp, sentiment_score, 
+                       volume_change, momentum_score, volatility
+                FROM trend_data 
+                WHERE keyword = ? AND timestamp >= ?
+                ORDER BY timestamp DESC
+            ''', (keyword, start_date.isoformat()))
+            
+            rows = cursor.fetchall()
+            conn.close()
+            
+            trend_data_list = []
+            for row in rows:
+                trend_data = TrendData(
+                    keyword=row[0],
+                    trend_type=TrendType(row[1]),
+                    value=row[2],
+                    timestamp=datetime.fromisoformat(row[3]),
+                    sentiment_score=row[4],
+                    volume_change=row[5],
+                    momentum_score=row[6],
+                    volatility=row[7]
+                )
+                trend_data_list.append(trend_data)
+            
+            return trend_data_list
+            
+        except Exception as e:
+            logger.error(f"과거 트렌드 데이터 조회 실패: {e}")
+            return []
+
+    async def collect_real_time_data(self):
+        """실시간 데이터 수집"""
+        try:
+            async with aiohttp.ClientSession() as session:
+                tasks = []
+                
+                for keyword in self.monitoring_keywords:
+                    # 검색 트렌드 수집
+                    task1 = self._collect_search_trend_async(session, keyword)
+                    tasks.append(task1)
+                    
+                    # 뉴스 감정 분석
+                    task2 = self._collect_news_sentiment_async(session, keyword)
+                    tasks.append(task2)
+                
+                # 병렬 실행
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # 결과 처리
+                for result in results:
+                    if isinstance(result, Exception):
+                        logger.error(f"실시간 데이터 수집 실패: {result}")
+                    elif result:
+                        self._save_trend_data(result)
+                
+                logger.info(f"실시간 데이터 수집 완료: {len(self.monitoring_keywords)}개 키워드")
+                
+        except Exception as e:
+            logger.error(f"실시간 데이터 수집 실패: {e}")
+
+    async def _collect_search_trend_async(self, session: aiohttp.ClientSession, keyword: str):
+        """비동기 검색 트렌드 수집"""
+        try:
+            url = f"{self.base_url}/datalab/search"
+            
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=7)  # 최근 7일
+            
+            data = {
+                "startDate": start_date.strftime("%Y-%m-%d"),
+                "endDate": end_date.strftime("%Y-%m-%d"),
+                "timeUnit": "date",
+                "keywordGroups": [
+                    {
+                        "groupName": keyword,
+                        "keywords": [keyword]
+                    }
+                ]
+            }
+            
+            async with session.post(url, headers=self.headers, json=data) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    return self._process_trend_data(result, keyword, TrendType.SEARCH)
+                else:
+                    logger.warning(f"검색 트렌드 API 오류 ({keyword}): {response.status}")
+                    return None
+                    
+        except Exception as e:
+            logger.error(f"비동기 검색 트렌드 수집 실패 ({keyword}): {e}")
+            return None
+
+    async def _collect_news_sentiment_async(self, session: aiohttp.ClientSession, keyword: str):
+        """비동기 뉴스 감정 분석 수집"""
+        try:
+            url = f"{self.base_url}/search/news.json"
+            params = {
+                'query': keyword,
+                'display': 50,
+                'start': 1,
+                'sort': 'date'
+            }
+            
+            async with session.get(url, headers=self.headers, params=params) as response:
+                if response.status == 200:
+                    result = await response.json()
+                    
+                    if 'items' in result and result['items']:
+                        # 간단한 감정 분석
+                        positive_words = ['상승', '급등', '호재', '성장', '확대', '증가']
+                        negative_words = ['하락', '급락', '악재', '감소', '축소', '실패']
+                        
+                        total_score = 0.0
+                        article_count = 0
+                        
+                        for item in result['items']:
+                            content = f"{item.get('title', '')} {item.get('description', '')}"
+                            
+                            positive_count = sum(1 for word in positive_words if word in content)
+                            negative_count = sum(1 for word in negative_words if word in content)
+                            
+                            if positive_count > 0 or negative_count > 0:
+                                score = (positive_count - negative_count) / (positive_count + negative_count)
+                                total_score += score
+                                article_count += 1
+                        
+                        sentiment_score = total_score / article_count if article_count > 0 else 0.0
+                        
+                        return TrendData(
+                            keyword=keyword,
+                            trend_type=TrendType.NEWS,
+                            value=sentiment_score,
+                            timestamp=datetime.now(),
+                            sentiment_score=sentiment_score
+                        )
+                else:
+                    logger.warning(f"뉴스 API 오류 ({keyword}): {response.status}")
+                    return None
+                    
+        except Exception as e:
+            logger.error(f"비동기 뉴스 감정 분석 실패 ({keyword}): {e}")
+            return None
     
     def analyze_trend_correlation(self, keyword: str, stock_data: Dict) -> StockTrendCorrelation:
         """트렌드-주식 상관관계 분석"""
