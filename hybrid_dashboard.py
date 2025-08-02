@@ -361,4 +361,4 @@ class HybridDashboard:
 
 if __name__ == "__main__":
     dashboard = HybridDashboard()
-    dashboard.start_dashboard() 
+    dashboard.start_dashboard(debug=True) 
