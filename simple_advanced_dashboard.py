@@ -263,8 +263,12 @@ class SimpleAdvancedDashboard:
                         }
                     },
                     'tooltip': {
+                        'enabled': True,
+                        'mode': 'index',
+                        'intersect': False,
                         'callbacks': {
-                            'label': 'function(context) { return context.label + ": " + context.parsed.toFixed(1) + "점"; }'
+                            'label': 'function(context) { return context.label + ": " + context.parsed.toFixed(1) + "점"; }',
+                            'title': 'function(context) { return context[0].label; }'
                         }
                     }
                 }
