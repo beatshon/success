@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📊 시뮬레이션 트레이딩 대시보드</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .summary-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+
+        .summary-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .summary-card h3 {
+            font-size: 2.5em;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .summary-card p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .performance-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .performance-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .performance-card h4 {
+            font-size: 1.8em;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .performance-card p {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .chart-container h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.5em;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .trade-details {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+
+        .trade-details h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.5em;
+        }
+
+        .trade-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .trade-table th,
+        .trade-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        .trade-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .trade-table tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: #666;
+        }
+
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            margin-bottom: 20px;
+            transition: background 0.3s ease;
+        }
+
+        .refresh-btn:hover {
+            background: #5a6fd8;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .summary-cards {
+                grid-template-columns: 1fr;
+            }
+            
+            .performance-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-chart-line"></i> 시뮬레이션 트레이딩 대시보드</h1>
+            <p>하이브리드 트레이딩 전략의 백테스팅 결과 분석</p>
+        </div>
+
+        <button class="refresh-btn" onclick="refreshData()">
+            <i class="fas fa-sync-alt"></i> 데이터 새로고침
+        </button>
+
+        <div class="summary-cards" id="summaryCards">
+            <div class="loading">데이터를 로딩 중입니다...</div>
+        </div>
+
+        <div class="performance-cards" id="performanceCards">
+            <div class="loading">성능 지표를 로딩 중입니다...</div>
+        </div>
+
+        <div class="main-content">
+            <div class="chart-container">
+                <h2><i class="fas fa-chart-area"></i> 포트폴리오 가치 변화</h2>
+                <div class="chart-wrapper" id="portfolioValueChart">
+                    <div class="loading">차트를 로딩 중입니다...</div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h2><i class="fas fa-chart-bar"></i> 수익률 분포</h2>
+                <div class="chart-wrapper" id="returnsDistributionChart">
+                    <div class="loading">차트를 로딩 중입니다...</div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h2><i class="fas fa-chart-line"></i> 낙폭 분석</h2>
+                <div class="chart-wrapper" id="drawdownChart">
+                    <div class="loading">차트를 로딩 중입니다...</div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h2><i class="fas fa-chart-pie"></i> 거래 결과 분석</h2>
+                <div class="chart-wrapper" id="tradeAnalysisChart">
+                    <div class="loading">차트를 로딩 중입니다...</div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h2><i class="fas fa-building"></i> 섹터별 성과</h2>
+                <div class="chart-wrapper" id="sectorPerformanceChart">
+                    <div class="loading">차트를 로딩 중입니다...</div>
+                </div>
+            </div>
+
+            <div class="chart-container">
+                <h2><i class="fas fa-shield-alt"></i> 위험 지표</h2>
+                <div class="chart-wrapper" id="riskMetricsChart">
+                    <div class="loading">차트를 로딩 중입니다...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="trade-details">
+            <h2><i class="fas fa-list"></i> 거래 상세 내역</h2>
+            <div id="tradeDetails">
+                <div class="loading">거래 내역을 로딩 중입니다...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 전역 변수
+        let lastUpdated = '';
+
+        // 페이지 로드 시 데이터 로드
+        document.addEventListener('DOMContentLoaded', function() {
+            loadDashboardData();
+            loadCharts();
+            loadTradeDetails();
+            
+            // 30초마다 자동 새로고침
+            setInterval(refreshData, 30000);
+        });
+
+        // 데이터 새로고침
+        function refreshData() {
+            loadDashboardData();
+            loadCharts();
+            loadTradeDetails();
+        }
+
+        // 대시보드 데이터 로드
+        async function loadDashboardData() {
+            try {
+                const response = await fetch('/api/simulation-data');
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError('summaryCards', data.error);
+                    showError('performanceCards', data.error);
+                    return;
+                }
+                
+                updateSummaryCards(data.summary);
+                updatePerformanceCards(data.performance);
+                lastUpdated = data.last_updated;
+                
+            } catch (error) {
+                console.error('대시보드 데이터 로드 실패:', error);
+                showError('summaryCards', '데이터 로드에 실패했습니다.');
+                showError('performanceCards', '데이터 로드에 실패했습니다.');
+            }
+        }
+
+        // 요약 카드 업데이트
+        function updateSummaryCards(summary) {
+            const container = document.getElementById('summaryCards');
+            container.innerHTML = `
+                <div class="summary-card">
+                    <h3>${summary.initial_value || 'N/A'}</h3>
+                    <p>초기 포트폴리오 가치</p>
+                </div>
+                <div class="summary-card">
+                    <h3>${summary.final_value || 'N/A'}</h3>
+                    <p>최종 포트폴리오 가치</p>
+                </div>
+                <div class="summary-card">
+                    <h3>${summary.total_return || 'N/A'}</h3>
+                    <p>총 수익률</p>
+                </div>
+                <div class="summary-card">
+                    <h3>${summary.total_trades || '0'}</h3>
+                    <p>총 거래 수</p>
+                </div>
+                <div class="summary-card">
+                    <h3>${summary.win_rate || '0%'}</h3>
+                    <p>승률</p>
+                </div>
+                <div class="summary-card">
+                    <h3>${summary.simulation_period || 'N/A'}</h3>
+                    <p>시뮬레이션 기간</p>
+                </div>
+            `;
+        }
+
+        // 성능 지표 카드 업데이트
+        function updatePerformanceCards(performance) {
+            const container = document.getElementById('performanceCards');
+            container.innerHTML = `
+                <div class="performance-card">
+                    <h4>${performance.total_return || 'N/A'}</h4>
+                    <p>총 수익률</p>
+                </div>
+                <div class="performance-card">
+                    <h4>${performance.annual_return || 'N/A'}</h4>
+                    <p>연간 수익률</p>
+                </div>
+                <div class="performance-card">
+                    <h4>${performance.volatility || 'N/A'}</h4>
+                    <p>변동성</p>
+                </div>
+                <div class="performance-card">
+                    <h4>${performance.sharpe_ratio || 'N/A'}</h4>
+                    <p>샤프 비율</p>
+                </div>
+                <div class="performance-card">
+                    <h4>${performance.max_drawdown || 'N/A'}</h4>
+                    <p>최대 낙폭</p>
+                </div>
+            `;
+        }
+
+        // 차트 로드
+        async function loadCharts() {
+            const chartTypes = [
+                'portfolio_value',
+                'returns_distribution',
+                'drawdown_analysis',
+                'trade_analysis',
+                'sector_performance',
+                'risk_metrics'
+            ];
+
+            for (const chartType of chartTypes) {
+                await loadChart(chartType);
+            }
+        }
+
+        // 개별 차트 로드
+        async function loadChart(chartType) {
+            try {
+                const response = await fetch(`/api/chart-data/${chartType}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(`${chartType.replace('_', '')}Chart`, data.error);
+                    return;
+                }
+                
+                const chartDiv = document.getElementById(`${chartType.replace('_', '')}Chart`);
+                chartDiv.innerHTML = '';
+                
+                Plotly.newPlot(chartDiv, data.data, data.layout, {
+                    responsive: true,
+                    displayModeBar: false
+                });
+                
+            } catch (error) {
+                console.error(`${chartType} 차트 로드 실패:`, error);
+                showError(`${chartType.replace('_', '')}Chart`, '차트 로드에 실패했습니다.');
+            }
+        }
+
+        // 거래 상세 내역 로드
+        async function loadTradeDetails() {
+            try {
+                const response = await fetch('/api/trade-details');
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError('tradeDetails', data.error);
+                    return;
+                }
+                
+                updateTradeDetails(data.trades);
+                
+            } catch (error) {
+                console.error('거래 상세 내역 로드 실패:', error);
+                showError('tradeDetails', '거래 내역 로드에 실패했습니다.');
+            }
+        }
+
+        // 거래 상세 내역 업데이트
+        function updateTradeDetails(trades) {
+            const container = document.getElementById('tradeDetails');
+            
+            if (!trades || trades.length === 0) {
+                container.innerHTML = '<p>거래 내역이 없습니다.</p>';
+                return;
+            }
+            
+            let tableHTML = `
+                <table class="trade-table">
+                    <thead>
+                        <tr>
+                            <th>날짜</th>
+                            <th>거래 유형</th>
+                            <th>종목</th>
+                            <th>수량</th>
+                            <th>거래 금액</th>
+                            <th>섹터</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            trades.forEach(trade => {
+                tableHTML += `
+                    <tr>
+                        <td>${trade.date || 'N/A'}</td>
+                        <td>${trade.trade_type || 'N/A'}</td>
+                        <td>${trade.stock || 'N/A'}</td>
+                        <td>${trade.amount || 'N/A'}</td>
+                        <td>${trade.value ? trade.value.toLocaleString() + '원' : 'N/A'}</td>
+                        <td>${trade.sector || 'N/A'}</td>
+                    </tr>
+                `;
+            });
+            
+            tableHTML += '</tbody></table>';
+            container.innerHTML = tableHTML;
+        }
+
+        // 에러 표시
+        function showError(elementId, message) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.innerHTML = `<div class="error">${message}</div>`;
+            }
+        }
+    </script>
+</body>
+</html> 
