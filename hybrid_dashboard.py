@@ -102,14 +102,48 @@ class HybridDashboard:
             # 신호 분포 계산
             signal_counts = data['final_signal'].value_counts().to_dict() if 'final_signal' in data.columns else {}
             
+            # 매수/매도 신호 개수 계산
+            buy_signals = sum(1 for signal in data['final_signal'] if '매수' in signal) if 'final_signal' in data.columns else 0
+            sell_signals = sum(1 for signal in data['final_signal'] if '매도' in signal) if 'final_signal' in data.columns else 0
+            
             return {
                 "total_stocks": total_stocks,
                 "avg_combined_score": round(avg_combined_score, 2),
+                "avg_score": round(avg_combined_score, 2),  # 대시보드에서 사용하는 필드명
+                "buy_signals": buy_signals,
+                "sell_signals": sell_signals,
                 "signal_distribution": signal_counts
             }
         except Exception as e:
             logger.error(f"요약 통계 생성 실패: {e}")
             return {}
+    
+    def _get_top_stocks(self, data):
+        """상위 종목 데이터를 생성합니다."""
+        try:
+            if 'combined_score' not in data.columns:
+                return []
+            
+            # 점수 순으로 정렬하여 상위 10개 선택
+            top_stocks = data.nlargest(10, 'combined_score')
+            
+            stocks_list = []
+            for _, row in top_stocks.iterrows():
+                stocks_list.append({
+                    'stock_code': row['stock_code'],
+                    'stock_name': row['stock_name'],
+                    'sector': row.get('sector', '기타'),
+                    'news_score': float(row['news_score']),
+                    'technical_score': float(row['technical_score']),
+                    'combined_score': float(row['combined_score']),
+                    'final_signal': row['final_signal'],
+                    'reasoning': row.get('reasoning', '')
+                })
+            
+            return stocks_list
+        except Exception as e:
+            logger.error(f"상위 종목 데이터 생성 실패: {e}")
+            return []
     
     def _create_score_distribution_chart(self, data):
         """점수 분포 차트 데이터를 생성합니다."""
