@@ -270,6 +270,7 @@ class IntegratedDashboard:
                     drawdown = (cumulative_returns - rolling_max) / rolling_max
                     overview["simulation"]["max_drawdown"] = round(drawdown.min() * 100, 2)
             
+            logger.info(f"개요 데이터 생성 완료 - 하이브리드: {overview['hybrid_analysis']['total_stocks']}개, 시뮬레이션 수익률: {overview['simulation']['total_return']}%")
             return overview
             
         except Exception as e:
