@@ -240,11 +240,6 @@ class HybridDashboard:
                     "plugins": {
                         "legend": {
                             "display": False
-                        },
-                        "tooltip": {
-                            "callbacks": {
-                                "label": lambda context: f"평균 점수: {context.parsed.y:.1f}"
-                            }
                         }
                     },
                     "scales": {
@@ -294,11 +289,6 @@ class HybridDashboard:
                     "plugins": {
                         "legend": {
                             "position": "bottom"
-                        },
-                        "tooltip": {
-                            "callbacks": {
-                                "label": lambda context: f"{context.label}: {context.parsed}개"
-                            }
                         }
                     }
                 }
@@ -350,11 +340,6 @@ class HybridDashboard:
                     "plugins": {
                         "legend": {
                             "position": "top"
-                        },
-                        "tooltip": {
-                            "callbacks": {
-                                "label": lambda context: f"{context.dataset.label}: {context.parsed.y:.1f}"
-                            }
                         }
                     },
                     "scales": {
