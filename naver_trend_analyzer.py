@@ -101,6 +101,43 @@ class NaverTrendAnalyzer:
             "부동산", "금리", "인플레이션", "달러", "원화", "코로나", "백신"
         ]
         
+        # 주가지수 관련 설정
+        self.market_indices = {
+            'KOSPI': '코스피',
+            'KOSDAQ': '코스닥',
+            'KOSPI200': '코스피200',
+            'KOSDAQ150': '코스닥150'
+        }
+        
+        # 시장 상황별 투자 전략 설정
+        self.market_strategies = {
+            'BULL_MARKET': {
+                'high_correlation_threshold': 0.6,  # 높은 상관관계 종목 임계값
+                'low_correlation_threshold': 0.3,   # 낮은 상관관계 종목 임계값
+                'high_correlation_weight': 0.7,     # 높은 상관관계 종목 가중치
+                'low_correlation_weight': 0.3       # 낮은 상관관계 종목 가중치
+            },
+            'BEAR_MARKET': {
+                'high_correlation_threshold': 0.6,
+                'low_correlation_threshold': 0.3,
+                'high_correlation_weight': 0.2,     # 하락장에서는 높은 상관관계 종목 비중 감소
+                'low_correlation_weight': 0.8       # 하락장에서는 낮은 상관관계 종목 비중 증가
+            },
+            'SIDEWAYS_MARKET': {
+                'high_correlation_threshold': 0.6,
+                'low_correlation_threshold': 0.3,
+                'high_correlation_weight': 0.5,     # 횡보장에서는 균형
+                'low_correlation_weight': 0.5
+            }
+        }
+        
+        # 시장 상황 판단 임계값
+        self.market_trend_thresholds = {
+            'BULL_MARKET': 0.05,    # 5% 이상 상승 시 상승장
+            'BEAR_MARKET': -0.05,   # 5% 이상 하락 시 하락장
+            'SIDEWAYS_MARKET': 0.02 # ±2% 범위 시 횡보장
+        }
+        
     def _init_database(self):
         """데이터베이스 초기화"""
         try:
