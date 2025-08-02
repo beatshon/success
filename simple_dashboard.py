@@ -242,14 +242,14 @@ class SimpleNewsDashboard:
             
             # CSV 파일 읽기 (오류 처리 강화)
             try:
-                df = pd.read_csv(file_path, encoding='utf-8-sig')
+                df = pd.read_csv(file_path, encoding='utf-8-sig', lineterminator='\n')
             except Exception as csv_error:
                 logger.error(f"CSV 파일 읽기 실패: {csv_error}")
                 # 다른 인코딩으로 시도
                 try:
-                    df = pd.read_csv(file_path, encoding='utf-8')
+                    df = pd.read_csv(file_path, encoding='utf-8', lineterminator='\n')
                 except:
-                    df = pd.read_csv(file_path, encoding='cp949')
+                    df = pd.read_csv(file_path, encoding='cp949', lineterminator='\n')
             
             # 분석 결과 반환
             analysis_results = []
@@ -258,9 +258,10 @@ class SimpleNewsDashboard:
                                     # 뉴스 링크 파싱
                 recent_links = []
                 if "recent_news_links" in row and pd.notna(row["recent_news_links"]):
-                    links_str = str(row["recent_news_links"])
-                    if links_str and links_str != "nan":
-                        recent_links = links_str.split(" | ")
+                    links_str = str(row["recent_news_links"]).strip()
+                    if links_str and links_str != "nan" and links_str != "":
+                        recent_links = [link.strip() for link in links_str.split(" | ") if link.strip()]
+                        logger.info(f"파싱된 링크: {stock_name} - {len(recent_links)}개 링크")
                 
                 analysis_results.append({
                     "stock_code": str(row["stock_code"]),
