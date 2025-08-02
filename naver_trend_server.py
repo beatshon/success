@@ -61,39 +61,36 @@ class NaverTrendServer:
             """메인 페이지"""
             return render_template('naver_trend_dashboard.html')
         
-        @self.app.route('/api/naver-trends')
+        @self.app.route('/api/naver-trends', methods=['GET'])
         def get_naver_trends():
             """네이버 트렌드 데이터 API"""
             try:
-                if not self.analyzer:
-                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                # 가상 데이터 강제 생성
+                if not self.analyzer.trend_data:
+                    self.analyzer._generate_virtual_trend_data()
                 
-                # 트렌드 요약
                 summary = self.analyzer.get_trend_summary()
-                
-                # 시장 감정 분석
+                trending_keywords = self.analyzer.get_trending_keywords()
                 market_sentiment = self.analyzer.get_market_sentiment()
-                
-                # 트렌딩 키워드
-                trending_keywords = market_sentiment.get('trending_keywords', [])
                 
                 return jsonify({
                     'summary': summary,
-                    'market_sentiment': market_sentiment,
                     'trending_keywords': trending_keywords,
+                    'market_sentiment': market_sentiment,
                     'timestamp': datetime.now().isoformat()
                 })
                 
             except Exception as e:
-                logger.error(f"트렌드 데이터 조회 실패: {e}")
+                logger.error(f"네이버 트렌드 데이터 조회 실패: {e}")
                 return jsonify({'error': str(e)}), 500
         
-        @self.app.route('/api/stock-signals/<stock_code>')
+        @self.app.route('/api/stock-signals/<stock_code>', methods=['GET'])
         def get_stock_signals(stock_code):
             """특정 종목 투자 신호 API"""
             try:
-                if not self.analyzer:
-                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                # 가상 데이터 강제 생성
+                if not self.analyzer.trend_data:
+                    self.analyzer._generate_virtual_trend_data()
                 
                 signals = self.analyzer.get_investment_signals(stock_code)
                 return jsonify(signals)
@@ -102,7 +99,7 @@ class NaverTrendServer:
                 logger.error(f"투자 신호 조회 실패 ({stock_code}): {e}")
                 return jsonify({'error': str(e)}), 500
         
-        @self.app.route('/api/market-sentiment')
+        @self.app.route('/api/market-sentiment', methods=['GET'])
         def get_market_sentiment():
             """시장 감정 분석 API"""
             try:
@@ -231,14 +228,16 @@ class NaverTrendServer:
                 logger.error(f"상관관계 분석 실패 ({keyword}): {e}")
                 return jsonify({'error': str(e)}), 500
         
-        @self.app.route('/api/trending-keywords')
+        @self.app.route('/api/trending-keywords', methods=['GET'])
         def get_trending_keywords():
             """트렌딩 키워드 API"""
             try:
-                if not self.analyzer:
-                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                # 가상 데이터 강제 생성
+                if not self.analyzer.trend_data:
+                    self.analyzer._generate_virtual_trend_data()
                 
-                trending_keywords = self.analyzer._find_trending_keywords()
+                trending_keywords = self.analyzer.get_trending_keywords()
+                
                 return jsonify({
                     'trending_keywords': trending_keywords,
                     'count': len(trending_keywords),
@@ -594,27 +593,22 @@ class NaverTrendServer:
 
 def main():
     """메인 함수"""
-    parser = argparse.ArgumentParser(description='네이버 트렌드 분석 서버')
-    parser.add_argument('--port', type=int, default=8085, help='서버 포트 (기본값: 8085)')
-    parser.add_argument('--client-id', help='네이버 API 클라이언트 ID')
-    parser.add_argument('--client-secret', help='네이버 API 클라이언트 시크릿')
-    
-    args = parser.parse_args()
-    
     try:
-        # 환경 변수에서 API 키 로드
-        client_id = args.client_id or os.getenv('NAVER_CLIENT_ID', 'YOUR_NAVER_CLIENT_ID')
-        client_secret = args.client_secret or os.getenv('NAVER_CLIENT_SECRET', 'YOUR_NAVER_CLIENT_SECRET')
+        # 명령행 인수 파싱
+        parser = argparse.ArgumentParser(description='네이버 트렌드 분석 서버')
+        parser.add_argument('--port', type=int, default=8085, help='서버 포트 (기본값: 8085)')
+        parser.add_argument('--host', type=str, default='0.0.0.0', help='서버 호스트 (기본값: 0.0.0.0)')
+        args = parser.parse_args()
         
         # 서버 생성 및 시작
-        server = NaverTrendServer(args.port, client_id, client_secret)
+        server = NaverTrendServer(port=args.port)
         server.start()
         
     except KeyboardInterrupt:
-        logger.info("서버 종료 요청됨")
+        logger.info("서버가 사용자에 의해 중지되었습니다.")
     except Exception as e:
-        logger.error(f"서버 실행 실패: {e}")
-        handle_error(ErrorType.SYSTEM_ERROR, ErrorLevel.ERROR, f"네이버 트렌드 서버 실행 실패: {e}")
+        logger.error(f"네이버 트렌드 서버 실행 실패: {e}")
+        sys.exit(1)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main() 
