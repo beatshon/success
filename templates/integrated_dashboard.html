@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🎯 키움 트레이딩 허브</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {
             margin: 0;
@@ -507,6 +508,63 @@
                 </div>
             </div>
         </div>
+
+        <!-- 차트 섹션 -->
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">포트폴리오 성과 트렌드</h2>
+                    <div class="card-icon icon-green">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                </div>
+                <div style="height: 300px;">
+                    <canvas id="performanceChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">매매 신호 분포</h2>
+                    <div class="card-icon icon-orange">
+                        <i class="fas fa-chart-pie"></i>
+                    </div>
+                </div>
+                <div style="height: 300px;">
+                    <canvas id="signalChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 시스템 상태 -->
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">시스템 상태</h2>
+                    <div class="card-icon icon-purple">
+                        <i class="fas fa-server"></i>
+                    </div>
+                </div>
+                <div id="systemStatus">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        상태 확인 중...
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">포트폴리오 성장률</h2>
+                    <div class="card-icon icon-blue">
+                        <i class="fas fa-trending-up"></i>
+                    </div>
+                </div>
+                <div style="height: 300px;">
+                    <canvas id="growthChart"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- 새로고침 버튼 -->
@@ -515,11 +573,18 @@
     </button>
 
     <script>
+        // 차트 객체들
+        let performanceChart = null;
+        let signalChart = null;
+        let growthChart = null;
+
         // 페이지 로드 시 데이터 로드
         document.addEventListener('DOMContentLoaded', function() {
             loadOverviewData();
             loadQuickStats();
             loadRecentActivity();
+            loadChartData();
+            loadSystemStatus();
             
             // 30초마다 자동 새로고침
             setInterval(refreshData, 30000);
@@ -530,6 +595,8 @@
             loadOverviewData();
             loadQuickStats();
             loadRecentActivity();
+            loadChartData();
+            loadSystemStatus();
         }
 
         // 개요 데이터 로드
@@ -695,6 +762,281 @@
                     </div>
                 `;
             });
+            
+            container.innerHTML = html;
+        }
+
+        // 차트 데이터 로드
+        async function loadChartData() {
+            await Promise.all([
+                loadPerformanceTrend(),
+                loadSignalDistribution(),
+                loadPortfolioGrowth()
+            ]);
+        }
+
+        // 성과 트렌드 차트 로드
+        async function loadPerformanceTrend() {
+            try {
+                const response = await fetch('/api/chart-data/performance-trend');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('성과 트렌드 데이터 로드 실패:', data.error);
+                    return;
+                }
+                
+                updatePerformanceChart(data);
+                
+            } catch (error) {
+                console.error('성과 트렌드 데이터 로드 실패:', error);
+            }
+        }
+
+        // 신호 분포 차트 로드
+        async function loadSignalDistribution() {
+            try {
+                const response = await fetch('/api/chart-data/signal-distribution');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('신호 분포 데이터 로드 실패:', data.error);
+                    return;
+                }
+                
+                updateSignalChart(data);
+                
+            } catch (error) {
+                console.error('신호 분포 데이터 로드 실패:', error);
+            }
+        }
+
+        // 포트폴리오 성장 차트 로드
+        async function loadPortfolioGrowth() {
+            try {
+                const response = await fetch('/api/chart-data/portfolio-growth');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('포트폴리오 성장 데이터 로드 실패:', data.error);
+                    return;
+                }
+                
+                updateGrowthChart(data);
+                
+            } catch (error) {
+                console.error('포트폴리오 성장 데이터 로드 실패:', error);
+            }
+        }
+
+        // 시스템 상태 로드
+        async function loadSystemStatus() {
+            try {
+                const response = await fetch('/api/system-status');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('시스템 상태 로드 실패:', data.error);
+                    return;
+                }
+                
+                updateSystemStatus(data);
+                
+            } catch (error) {
+                console.error('시스템 상태 로드 실패:', error);
+            }
+        }
+
+        // 성과 트렌드 차트 업데이트
+        function updatePerformanceChart(data) {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            
+            if (performanceChart) {
+                performanceChart.destroy();
+            }
+            
+            if (!data.dates || data.dates.length === 0) {
+                document.getElementById('performanceChart').parentElement.innerHTML = 
+                    '<p style="text-align: center; color: #666; padding: 40px;">데이터가 없습니다.</p>';
+                return;
+            }
+            
+            performanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.dates,
+                    datasets: [{
+                        label: '포트폴리오 가치',
+                        data: data.values,
+                        borderColor: '#0064ff',
+                        backgroundColor: 'rgba(0, 100, 255, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 신호 분포 차트 업데이트
+        function updateSignalChart(data) {
+            const ctx = document.getElementById('signalChart').getContext('2d');
+            
+            if (signalChart) {
+                signalChart.destroy();
+            }
+            
+            if (!data.signals || data.signals.length === 0) {
+                document.getElementById('signalChart').parentElement.innerHTML = 
+                    '<p style="text-align: center; color: #666; padding: 40px;">데이터가 없습니다.</p>';
+                return;
+            }
+            
+            const colors = ['#00c851', '#ff4444', '#ff9800'];
+            
+            signalChart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.signals,
+                    datasets: [{
+                        data: data.counts,
+                        backgroundColor: colors.slice(0, data.signals.length),
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+
+        // 성장률 차트 업데이트
+        function updateGrowthChart(data) {
+            const ctx = document.getElementById('growthChart').getContext('2d');
+            
+            if (growthChart) {
+                growthChart.destroy();
+            }
+            
+            if (!data.dates || data.dates.length === 0) {
+                document.getElementById('growthChart').parentElement.innerHTML = 
+                    '<p style="text-align: center; color: #666; padding: 40px;">데이터가 없습니다.</p>';
+                return;
+            }
+            
+            growthChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.dates,
+                    datasets: [{
+                        label: '일별 성장률 (%)',
+                        data: data.growth,
+                        backgroundColor: data.growth.map(value => value >= 0 ? '#00c851' : '#ff4444'),
+                        borderColor: data.growth.map(value => value >= 0 ? '#00c851' : '#ff4444'),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // 시스템 상태 업데이트
+        function updateSystemStatus(status) {
+            const container = document.getElementById('systemStatus');
+            
+            let html = `
+                <div style="margin-bottom: 20px;">
+                    <div style="font-size: 12px; color: #666; margin-bottom: 5px;">마지막 업데이트</div>
+                    <div style="font-weight: 600;">${status.last_updated}</div>
+                </div>
+            `;
+            
+            // 하이브리드 데이터 상태
+            const hybridStatus = status.hybrid_data.available ? 'success' : 'error';
+            const hybridIcon = status.hybrid_data.available ? 'fas fa-check-circle' : 'fas fa-times-circle';
+            const hybridColor = status.hybrid_data.available ? '#00c851' : '#ff4444';
+            
+            html += `
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                        <i class="${hybridIcon}" style="color: ${hybridColor};"></i>
+                        <span style="font-weight: 600;">하이브리드 분석 데이터</span>
+                    </div>
+                    <div style="font-size: 14px; color: #666;">
+                        ${status.hybrid_data.available ? 
+                            `${status.hybrid_data.data_count}개 종목 (${status.hybrid_data.last_update} 업데이트)` : 
+                            '데이터 없음'}
+                    </div>
+                </div>
+            `;
+            
+            // 시뮬레이션 데이터 상태
+            const simStatus = status.simulation_data.available ? 'success' : 'error';
+            const simIcon = status.simulation_data.available ? 'fas fa-check-circle' : 'fas fa-times-circle';
+            const simColor = status.simulation_data.available ? '#00c851' : '#ff4444';
+            
+            html += `
+                <div style="margin-bottom: 15px;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 5px;">
+                        <i class="${simIcon}" style="color: ${simColor};"></i>
+                        <span style="font-weight: 600;">시뮬레이션 데이터</span>
+                    </div>
+                    <div style="font-size: 14px; color: #666;">
+                        ${status.simulation_data.available ? 
+                            `${status.simulation_data.data_count}일 데이터 (${status.simulation_data.last_update} 업데이트)` : 
+                            '데이터 없음'}
+                    </div>
+                </div>
+            `;
             
             container.innerHTML = html;
         }

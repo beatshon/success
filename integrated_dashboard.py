@@ -157,13 +157,14 @@ class IntegratedDashboard:
                     "buy_signals": len(hybrid_data[hybrid_data['final_signal'] == '매수']) if hybrid_data is not None else 0,
                     "sell_signals": len(hybrid_data[hybrid_data['final_signal'] == '매도']) if hybrid_data is not None else 0,
                     "hold_signals": len(hybrid_data[hybrid_data['final_signal'] == '관망']) if hybrid_data is not None else 0,
-                    "avg_score": hybrid_data['combined_score'].mean() if hybrid_data is not None else 0
+                    "avg_score": round(hybrid_data['combined_score'].mean(), 2) if hybrid_data is not None else 0
                 },
                 "simulation": {
                     "total_return": 0,
                     "win_rate": 0,
                     "total_trades": 0,
-                    "max_drawdown": 0
+                    "max_drawdown": 0,
+                    "sharpe_ratio": 0
                 }
             }
             
@@ -171,27 +172,106 @@ class IntegratedDashboard:
                 if 'portfolio_value' in simulation_data.columns:
                     initial_value = simulation_data['portfolio_value'].iloc[0]
                     final_value = simulation_data['portfolio_value'].iloc[-1]
-                    overview["simulation"]["total_return"] = ((final_value - initial_value) / initial_value) * 100
+                    overview["simulation"]["total_return"] = round(((final_value - initial_value) / initial_value) * 100, 2)
+                    
+                    # 샤프 비율 계산
+                    returns = simulation_data['portfolio_value'].pct_change().dropna()
+                    if len(returns) > 0:
+                        sharpe_ratio = (returns.mean() / returns.std()) * (252 ** 0.5) if returns.std() > 0 else 0
+                        overview["simulation"]["sharpe_ratio"] = round(sharpe_ratio, 2)
                 
                 if 'trades' in simulation_data.columns:
                     trade_data = simulation_data[simulation_data['trades'] != 0]
                     total_trades = len(trade_data)
                     winning_trades = len(trade_data[trade_data['trades'] > 0])
                     overview["simulation"]["total_trades"] = total_trades
-                    overview["simulation"]["win_rate"] = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+                    overview["simulation"]["win_rate"] = round((winning_trades / total_trades * 100), 1) if total_trades > 0 else 0
                 
                 if 'portfolio_value' in simulation_data.columns:
                     returns = simulation_data['portfolio_value'].pct_change().dropna()
                     cumulative_returns = (1 + returns).cumprod()
                     rolling_max = cumulative_returns.expanding().max()
                     drawdown = (cumulative_returns - rolling_max) / rolling_max
-                    overview["simulation"]["max_drawdown"] = drawdown.min() * 100
+                    overview["simulation"]["max_drawdown"] = round(drawdown.min() * 100, 2)
             
             return overview
             
         except Exception as e:
             logger.error(f"개요 데이터 생성 실패: {e}")
             return {}
+    
+    def _validate_data_quality(self):
+        """데이터 품질을 검증합니다."""
+        try:
+            validation_results = {
+                "hybrid_data": {
+                    "valid": False,
+                    "issues": [],
+                    "last_check": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                },
+                "simulation_data": {
+                    "valid": False,
+                    "issues": [],
+                    "last_check": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+            }
+            
+            # 하이브리드 데이터 검증
+            hybrid_data = self._get_latest_hybrid_data()
+            if hybrid_data is not None:
+                validation_results["hybrid_data"]["valid"] = True
+                
+                # 필수 컬럼 확인
+                required_columns = ['stock_name', 'final_signal', 'combined_score']
+                missing_columns = [col for col in required_columns if col not in hybrid_data.columns]
+                if missing_columns:
+                    validation_results["hybrid_data"]["issues"].append(f"필수 컬럼 누락: {missing_columns}")
+                
+                # 데이터 타입 검증
+                if 'combined_score' in hybrid_data.columns:
+                    if not pd.api.types.is_numeric_dtype(hybrid_data['combined_score']):
+                        validation_results["hybrid_data"]["issues"].append("combined_score가 숫자 타입이 아닙니다")
+                
+                # 신호 값 검증
+                if 'final_signal' in hybrid_data.columns:
+                    valid_signals = ['매수', '매도', '관망']
+                    invalid_signals = hybrid_data[~hybrid_data['final_signal'].isin(valid_signals)]
+                    if len(invalid_signals) > 0:
+                        validation_results["hybrid_data"]["issues"].append(f"잘못된 신호 값: {len(invalid_signals)}개")
+            else:
+                validation_results["hybrid_data"]["issues"].append("데이터 파일을 찾을 수 없습니다")
+            
+            # 시뮬레이션 데이터 검증
+            simulation_data = self._get_latest_simulation_data()
+            if simulation_data is not None:
+                validation_results["simulation_data"]["valid"] = True
+                
+                # 필수 컬럼 확인
+                required_columns = ['portfolio_value']
+                missing_columns = [col for col in required_columns if col not in simulation_data.columns]
+                if missing_columns:
+                    validation_results["simulation_data"]["issues"].append(f"필수 컬럼 누락: {missing_columns}")
+                
+                # 데이터 타입 검증
+                if 'portfolio_value' in simulation_data.columns:
+                    if not pd.api.types.is_numeric_dtype(simulation_data['portfolio_value']):
+                        validation_results["simulation_data"]["issues"].append("portfolio_value가 숫자 타입이 아닙니다")
+                    
+                    # 음수 값 확인
+                    negative_values = simulation_data[simulation_data['portfolio_value'] < 0]
+                    if len(negative_values) > 0:
+                        validation_results["simulation_data"]["issues"].append(f"음수 포트폴리오 값: {len(negative_values)}개")
+            else:
+                validation_results["simulation_data"]["issues"].append("데이터 파일을 찾을 수 없습니다")
+            
+            return validation_results
+            
+        except Exception as e:
+            logger.error(f"데이터 품질 검증 실패: {e}")
+            return {
+                "hybrid_data": {"valid": False, "issues": [str(e)], "last_check": datetime.now().strftime("%Y-%m-%d %H:%M:%S")},
+                "simulation_data": {"valid": False, "issues": [str(e)], "last_check": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+            }
     
     def _get_quick_stats(self):
         """빠른 통계를 생성합니다."""
@@ -274,6 +354,113 @@ class IntegratedDashboard:
         except Exception as e:
             logger.error(f"최근 활동 생성 실패: {e}")
             return {"activities": []}
+    
+    def _get_performance_trend(self):
+        """성과 트렌드 차트 데이터를 생성합니다."""
+        try:
+            simulation_data = self._get_latest_simulation_data()
+            
+            if simulation_data is None or 'portfolio_value' not in simulation_data.columns:
+                return {"dates": [], "values": [], "returns": []}
+            
+            # 포트폴리오 가치 변화
+            dates = simulation_data.index.tolist()
+            values = simulation_data['portfolio_value'].tolist()
+            
+            # 수익률 계산
+            initial_value = values[0]
+            returns = [((value - initial_value) / initial_value) * 100 for value in values]
+            
+            return {
+                "dates": dates,
+                "values": values,
+                "returns": returns
+            }
+            
+        except Exception as e:
+            logger.error(f"성과 트렌드 데이터 생성 실패: {e}")
+            return {"dates": [], "values": [], "returns": []}
+    
+    def _get_signal_distribution(self):
+        """신호 분포 차트 데이터를 생성합니다."""
+        try:
+            hybrid_data = self._get_latest_hybrid_data()
+            
+            if hybrid_data is None or 'final_signal' not in hybrid_data.columns:
+                return {"signals": [], "counts": []}
+            
+            signal_counts = hybrid_data['final_signal'].value_counts()
+            
+            return {
+                "signals": signal_counts.index.tolist(),
+                "counts": signal_counts.values.tolist()
+            }
+            
+        except Exception as e:
+            logger.error(f"신호 분포 데이터 생성 실패: {e}")
+            return {"signals": [], "counts": []}
+    
+    def _get_portfolio_growth(self):
+        """포트폴리오 성장 차트 데이터를 생성합니다."""
+        try:
+            simulation_data = self._get_latest_simulation_data()
+            
+            if simulation_data is None or 'portfolio_value' not in simulation_data.columns:
+                return {"dates": [], "growth": []}
+            
+            # 성장률 계산 (일별)
+            portfolio_values = simulation_data['portfolio_value']
+            growth_rates = portfolio_values.pct_change().fillna(0) * 100
+            
+            return {
+                "dates": simulation_data.index.tolist(),
+                "growth": growth_rates.tolist()
+            }
+            
+        except Exception as e:
+            logger.error(f"포트폴리오 성장 데이터 생성 실패: {e}")
+            return {"dates": [], "growth": []}
+    
+    def _get_system_status(self):
+        """시스템 상태를 확인합니다."""
+        try:
+            status = {
+                "last_updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "hybrid_data": {
+                    "available": False,
+                    "last_update": None,
+                    "data_count": 0
+                },
+                "simulation_data": {
+                    "available": False,
+                    "last_update": None,
+                    "data_count": 0
+                },
+                "services": {
+                    "hybrid_dashboard": "unknown",
+                    "simulation_dashboard": "unknown"
+                }
+            }
+            
+            # 하이브리드 데이터 상태
+            hybrid_data = self._get_latest_hybrid_data()
+            if hybrid_data is not None:
+                status["hybrid_data"]["available"] = True
+                status["hybrid_data"]["data_count"] = len(hybrid_data)
+                status["hybrid_data"]["last_update"] = datetime.now().strftime("%H:%M")
+            
+            # 시뮬레이션 데이터 상태
+            simulation_data = self._get_latest_simulation_data()
+            if simulation_data is not None:
+                status["simulation_data"]["available"] = True
+                status["simulation_data"]["data_count"] = len(simulation_data)
+                status["simulation_data"]["last_update"] = datetime.now().strftime("%H:%M")
+            
+            return status
+            
+        except Exception as e:
+            logger.error(f"시스템 상태 확인 실패: {e}")
+            return {"error": str(e)}
     
     def start_dashboard(self, host='0.0.0.0', port=8080, debug=False):
         """통합 대시보드를 시작합니다."""
