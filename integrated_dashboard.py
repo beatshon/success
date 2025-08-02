@@ -185,22 +185,35 @@ class IntegratedDashboard:
         """최신 시뮬레이션 데이터를 로드합니다."""
         try:
             if not os.path.exists(self.simulation_data_dir):
+                logger.warning(f"시뮬레이션 데이터 디렉토리가 존재하지 않습니다: {self.simulation_data_dir}")
                 return None
             
             csv_files = [f for f in os.listdir(self.simulation_data_dir) if f.endswith('.csv')]
             if not csv_files:
+                logger.warning("시뮬레이션 CSV 파일을 찾을 수 없습니다.")
                 return None
             
+            # 가장 최신 파일 선택
             latest_file = max(csv_files, key=lambda x: os.path.getctime(os.path.join(self.simulation_data_dir, x)))
             file_path = os.path.join(self.simulation_data_dir, latest_file)
             
+            # 다양한 인코딩으로 시도
             for encoding in ['utf-8-sig', 'utf-8', 'cp949']:
                 try:
                     data = pd.read_csv(file_path, encoding=encoding)
+                    
+                    # 날짜 컬럼이 있으면 인덱스로 설정
+                    if 'date' in data.columns:
+                        data['date'] = pd.to_datetime(data['date'])
+                        data.set_index('date', inplace=True)
+                    
+                    logger.info(f"시뮬레이션 데이터 로드 완료: {latest_file}")
                     return data
-                except Exception:
+                except Exception as e:
+                    logger.warning(f"인코딩 {encoding}로 로드 실패: {e}")
                     continue
             
+            logger.error("모든 인코딩으로 시도했지만 데이터 로드에 실패했습니다.")
             return None
             
         except Exception as e:
