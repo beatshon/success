@@ -10,6 +10,7 @@ import time
 import threading
 import signal
 import argparse
+import asyncio
 from datetime import datetime
 from flask import Flask, jsonify, render_template, request
 from flask_cors import CORS
@@ -33,6 +34,10 @@ class NaverTrendServer:
         
         # 트렌드 분석기
         self.analyzer = None
+        
+        # 실시간 데이터 수집 상태
+        self.data_collection_running = False
+        self.collection_thread = None
         
         # 시그널 핸들러 설정
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -64,24 +69,15 @@ class NaverTrendServer:
                 # 트렌드 요약
                 summary = self.analyzer.get_trend_summary()
                 
-                # 투자 신호 목록
-                signals = []
-                for stock_code, data in self.analyzer.trend_data.items():
-                    if stock_code != 'market' and isinstance(data, dict):
-                        signals.append(data)
+                # 시장 감정 분석
+                market_sentiment = self.analyzer.get_market_sentiment()
                 
-                # 트렌딩 키워드 (예시 데이터)
-                trending_keywords = [
-                    {'name': '삼성전자', 'change': 15.2, 'trend': 'up'},
-                    {'name': '전기차', 'change': 8.7, 'trend': 'up'},
-                    {'name': 'AI', 'change': 12.3, 'trend': 'up'},
-                    {'name': '부동산', 'change': -5.1, 'trend': 'down'},
-                    {'name': '금리', 'change': -3.2, 'trend': 'down'}
-                ]
+                # 트렌딩 키워드
+                trending_keywords = market_sentiment.get('trending_keywords', [])
                 
                 return jsonify({
                     'summary': summary,
-                    'signals': signals,
+                    'market_sentiment': market_sentiment,
                     'trending_keywords': trending_keywords,
                     'timestamp': datetime.now().isoformat()
                 })
@@ -98,13 +94,10 @@ class NaverTrendServer:
                     return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
                 
                 signals = self.analyzer.get_investment_signals(stock_code)
-                if signals:
-                    return jsonify(signals)
-                else:
-                    return jsonify({'error': '해당 종목의 신호를 찾을 수 없습니다.'}), 404
-                    
+                return jsonify(signals)
+                
             except Exception as e:
-                logger.error(f"종목 신호 조회 실패: {stock_code} - {e}")
+                logger.error(f"투자 신호 조회 실패 ({stock_code}): {e}")
                 return jsonify({'error': str(e)}), 500
         
         @self.app.route('/api/market-sentiment')
@@ -115,13 +108,10 @@ class NaverTrendServer:
                     return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
                 
                 sentiment = self.analyzer.get_market_sentiment()
-                if sentiment:
-                    return jsonify(sentiment)
-                else:
-                    return jsonify({'error': '시장 감정 데이터를 가져올 수 없습니다.'}), 500
-                    
+                return jsonify(sentiment)
+                
             except Exception as e:
-                logger.error(f"시장 감정 조회 실패: {e}")
+                logger.error(f"시장 감정 분석 실패: {e}")
                 return jsonify({'error': str(e)}), 500
         
         @self.app.route('/api/search-trend/<keyword>')
@@ -131,14 +121,12 @@ class NaverTrendServer:
                 if not self.analyzer:
                     return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
                 
-                trend = self.analyzer.get_search_trend(keyword)
-                if trend:
-                    return jsonify(trend)
-                else:
-                    return jsonify({'error': '검색 트렌드 데이터를 가져올 수 없습니다.'}), 500
-                    
+                period = request.args.get('period', '1month')
+                trend_data = self.analyzer.get_search_trend(keyword, period)
+                return jsonify(trend_data)
+                
             except Exception as e:
-                logger.error(f"검색 트렌드 조회 실패: {keyword} - {e}")
+                logger.error(f"검색 트렌드 조회 실패 ({keyword}): {e}")
                 return jsonify({'error': str(e)}), 500
         
         @self.app.route('/api/shopping-trend/<category>')
@@ -148,14 +136,11 @@ class NaverTrendServer:
                 if not self.analyzer:
                     return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
                 
-                trend = self.analyzer.get_shopping_trend(category)
-                if trend:
-                    return jsonify(trend)
-                else:
-                    return jsonify({'error': '쇼핑 트렌드 데이터를 가져올 수 없습니다.'}), 500
-                    
+                trend_data = self.analyzer.get_shopping_trend(category)
+                return jsonify(trend_data)
+                
             except Exception as e:
-                logger.error(f"쇼핑 트렌드 조회 실패: {category} - {e}")
+                logger.error(f"쇼핑 트렌드 조회 실패 ({category}): {e}")
                 return jsonify({'error': str(e)}), 500
         
         @self.app.route('/api/news-sentiment/<keyword>')
@@ -174,137 +159,288 @@ class NaverTrendServer:
                 })
                 
             except Exception as e:
-                logger.error(f"뉴스 감정 분석 실패: {keyword} - {e}")
+                logger.error(f"뉴스 감정 분석 실패 ({keyword}): {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/historical-data/<keyword>')
+        def get_historical_data(keyword):
+            """과거 트렌드 데이터 API"""
+            try:
+                if not self.analyzer:
+                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                
+                days = int(request.args.get('days', 30))
+                historical_data = self.analyzer.get_historical_trend_data(keyword, days)
+                
+                # 데이터 직렬화
+                serialized_data = []
+                for trend in historical_data:
+                    serialized_data.append({
+                        'keyword': trend.keyword,
+                        'trend_type': trend.trend_type.value,
+                        'value': trend.value,
+                        'timestamp': trend.timestamp.isoformat(),
+                        'sentiment_score': trend.sentiment_score,
+                        'volume_change': trend.volume_change,
+                        'momentum_score': trend.momentum_score,
+                        'volatility': trend.volatility
+                    })
+                
+                return jsonify({
+                    'keyword': keyword,
+                    'data': serialized_data,
+                    'count': len(serialized_data)
+                })
+                
+            except Exception as e:
+                logger.error(f"과거 데이터 조회 실패 ({keyword}): {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/correlation/<keyword>')
+        def get_correlation(keyword):
+            """트렌드-주식 상관관계 API"""
+            try:
+                if not self.analyzer:
+                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                
+                # 가상의 주식 데이터 (실제로는 주식 API에서 가져와야 함)
+                stock_data = {
+                    'prices': [100 + i * 0.5 + np.random.normal(0, 1) for i in range(30)]
+                }
+                
+                correlation = self.analyzer.analyze_trend_correlation(keyword, stock_data)
+                
+                if correlation:
+                    return jsonify({
+                        'keyword': correlation.keyword,
+                        'stock_code': correlation.stock_code,
+                        'stock_name': correlation.stock_name,
+                        'correlation_score': correlation.correlation_score,
+                        'trend_direction': correlation.trend_direction,
+                        'confidence_level': correlation.confidence_level,
+                        'impact_score': correlation.impact_score,
+                        'prediction_accuracy': correlation.prediction_accuracy,
+                        'last_updated': correlation.last_updated.isoformat()
+                    })
+                else:
+                    return jsonify({'error': '상관관계 데이터를 찾을 수 없습니다.'}), 404
+                
+            except Exception as e:
+                logger.error(f"상관관계 분석 실패 ({keyword}): {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/trending-keywords')
+        def get_trending_keywords():
+            """트렌딩 키워드 API"""
+            try:
+                if not self.analyzer:
+                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                
+                trending_keywords = self.analyzer._find_trending_keywords()
+                return jsonify({
+                    'trending_keywords': trending_keywords,
+                    'count': len(trending_keywords),
+                    'timestamp': datetime.now().isoformat()
+                })
+                
+            except Exception as e:
+                logger.error(f"트렌딩 키워드 조회 실패: {e}")
                 return jsonify({'error': str(e)}), 500
         
         @self.app.route('/api/health')
         def health_check():
-            """헬스 체크"""
+            """헬스 체크 API"""
             return jsonify({
                 'status': 'healthy',
-                'analyzer_running': self.analyzer.running if self.analyzer else False,
+                'analyzer_initialized': self.analyzer is not None,
+                'data_collection_running': self.data_collection_running,
                 'timestamp': datetime.now().isoformat()
             })
         
         @self.app.route('/api/start-analysis')
         def start_analysis():
-            """분석 시작"""
+            """연속 분석 시작 API"""
             try:
                 if not self.analyzer:
                     return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
                 
-                if not self.analyzer.running:
-                    self.analyzer.start_continuous_analysis()
-                    return jsonify({'message': '트렌드 분석이 시작되었습니다.'})
-                else:
-                    return jsonify({'message': '트렌드 분석이 이미 실행 중입니다.'})
-                    
+                self.analyzer.start_continuous_analysis()
+                return jsonify({
+                    'status': 'success',
+                    'message': '연속 분석이 시작되었습니다.',
+                    'timestamp': datetime.now().isoformat()
+                })
+                
             except Exception as e:
-                logger.error(f"분석 시작 실패: {e}")
+                logger.error(f"연속 분석 시작 실패: {e}")
                 return jsonify({'error': str(e)}), 500
         
         @self.app.route('/api/stop-analysis')
         def stop_analysis():
-            """분석 중지"""
+            """연속 분석 중지 API"""
             try:
                 if not self.analyzer:
                     return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
                 
-                if self.analyzer.running:
-                    self.analyzer.stop_continuous_analysis()
-                    return jsonify({'message': '트렌드 분석이 중지되었습니다.'})
-                else:
-                    return jsonify({'message': '트렌드 분석이 실행 중이 아닙니다.'})
-                    
+                self.analyzer.stop_continuous_analysis()
+                return jsonify({
+                    'status': 'success',
+                    'message': '연속 분석이 중지되었습니다.',
+                    'timestamp': datetime.now().isoformat()
+                })
+                
             except Exception as e:
-                logger.error(f"분석 중지 실패: {e}")
+                logger.error(f"연속 분석 중지 실패: {e}")
                 return jsonify({'error': str(e)}), 500
-    
+        
+        @self.app.route('/api/start-data-collection')
+        def start_data_collection():
+            """실시간 데이터 수집 시작 API"""
+            try:
+                if not self.analyzer:
+                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                
+                if self.data_collection_running:
+                    return jsonify({'error': '이미 데이터 수집이 실행 중입니다.'}), 400
+                
+                self.data_collection_running = True
+                self.collection_thread = threading.Thread(target=self._data_collection_worker)
+                self.collection_thread.daemon = True
+                self.collection_thread.start()
+                
+                return jsonify({
+                    'status': 'success',
+                    'message': '실시간 데이터 수집이 시작되었습니다.',
+                    'timestamp': datetime.now().isoformat()
+                })
+                
+            except Exception as e:
+                logger.error(f"데이터 수집 시작 실패: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/stop-data-collection')
+        def stop_data_collection():
+            """실시간 데이터 수집 중지 API"""
+            try:
+                if not self.data_collection_running:
+                    return jsonify({'error': '데이터 수집이 실행 중이 아닙니다.'}), 400
+                
+                self.data_collection_running = False
+                if self.collection_thread:
+                    self.collection_thread.join(timeout=5)
+                
+                return jsonify({
+                    'status': 'success',
+                    'message': '실시간 데이터 수집이 중지되었습니다.',
+                    'timestamp': datetime.now().isoformat()
+                })
+                
+            except Exception as e:
+                logger.error(f"데이터 수집 중지 실패: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/collect-data-now')
+        def collect_data_now():
+            """즉시 데이터 수집 API"""
+            try:
+                if not self.analyzer:
+                    return jsonify({'error': '트렌드 분석기가 초기화되지 않았습니다.'}), 500
+                
+                # 비동기 데이터 수집 실행
+                asyncio.run(self.analyzer.collect_real_time_data())
+                
+                return jsonify({
+                    'status': 'success',
+                    'message': '데이터 수집이 완료되었습니다.',
+                    'timestamp': datetime.now().isoformat()
+                })
+                
+            except Exception as e:
+                logger.error(f"즉시 데이터 수집 실패: {e}")
+                return jsonify({'error': str(e)}), 500
+
+    def _data_collection_worker(self):
+        """데이터 수집 워커 스레드"""
+        while self.data_collection_running:
+            try:
+                # 비동기 데이터 수집 실행
+                asyncio.run(self.analyzer.collect_real_time_data())
+                
+                # 30분 대기
+                time.sleep(1800)
+                
+            except Exception as e:
+                logger.error(f"데이터 수집 워커 오류: {e}")
+                time.sleep(60)  # 오류 시 1분 대기
+
     def initialize_analyzer(self):
         """트렌드 분석기 초기화"""
         try:
-            logger.info("네이버 트렌드 분석기 초기화 중...")
-            
             self.analyzer = NaverTrendAnalyzer(self.client_id, self.client_secret)
+            logger.info("네이버 트렌드 분석기가 초기화되었습니다.")
             
             # 연속 분석 시작
             self.analyzer.start_continuous_analysis()
             
-            logger.info("네이버 트렌드 분석기 초기화 완료")
-            
         except Exception as e:
             logger.error(f"트렌드 분석기 초기화 실패: {e}")
-            raise
-    
+            handle_error(ErrorType.INITIALIZATION_ERROR, ErrorLevel.ERROR, f"네이버 트렌드 분석기 초기화 실패: {e}")
+
     def start(self):
         """서버 시작"""
         try:
-            logger.info(f"네이버 트렌드 서버 시작: http://localhost:{self.port}")
-            
-            # 트렌드 분석기 초기화
+            # 분석기 초기화
             self.initialize_analyzer()
             
             # Flask 서버 시작
+            logger.info(f"네이버 트렌드 분석 서버가 시작되었습니다: http://localhost:{self.port}")
             self.app.run(host='0.0.0.0', port=self.port, debug=False)
             
         except Exception as e:
             logger.error(f"서버 시작 실패: {e}")
-            self.stop()
-            raise
-    
+            handle_error(ErrorType.SYSTEM_ERROR, ErrorLevel.ERROR, f"네이버 트렌드 서버 시작 실패: {e}")
+
     def stop(self):
         """서버 중지"""
         try:
+            # 데이터 수집 중지
+            if self.data_collection_running:
+                self.data_collection_running = False
+                if self.collection_thread:
+                    self.collection_thread.join(timeout=5)
+            
+            # 분석기 중지
             if self.analyzer:
                 self.analyzer.stop_continuous_analysis()
             
-            logger.info("네이버 트렌드 서버 중지")
+            logger.info("네이버 트렌드 분석 서버가 중지되었습니다.")
             
         except Exception as e:
-            logger.error(f"서버 중지 오류: {e}")
+            logger.error(f"서버 중지 실패: {e}")
 
 def main():
     """메인 함수"""
-    parser = argparse.ArgumentParser(description="네이버 트렌드 분석 서버")
-    parser.add_argument("--port", type=int, default=8085, 
-                       help="서버 포트 (기본값: 8085)")
-    parser.add_argument("--client-id", type=str, 
-                       help="네이버 API 클라이언트 ID")
-    parser.add_argument("--client-secret", type=str, 
-                       help="네이버 API 클라이언트 시크릿")
-    parser.add_argument("--config-file", type=str,
-                       help="설정 파일 경로")
+    parser = argparse.ArgumentParser(description='네이버 트렌드 분석 서버')
+    parser.add_argument('--port', type=int, default=8085, help='서버 포트 (기본값: 8085)')
+    parser.add_argument('--client-id', help='네이버 API 클라이언트 ID')
+    parser.add_argument('--client-secret', help='네이버 API 클라이언트 시크릿')
     
     args = parser.parse_args()
     
     try:
-        # 설정 파일에서 API 키 로드 (선택사항)
-        client_id = args.client_id
-        client_secret = args.client_secret
+        # 환경 변수에서 API 키 로드
+        client_id = args.client_id or os.getenv('NAVER_CLIENT_ID', 'YOUR_NAVER_CLIENT_ID')
+        client_secret = args.client_secret or os.getenv('NAVER_CLIENT_SECRET', 'YOUR_NAVER_CLIENT_SECRET')
         
-        if args.config_file:
-            import json
-            with open(args.config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                client_id = client_id or config.get('naver_client_id')
-                client_secret = client_secret or config.get('naver_client_secret')
-        
-        # 서버 초기화
-        server = NaverTrendServer(
-            port=args.port,
-            client_id=client_id,
-            client_secret=client_secret
-        )
-        
-        # 서버 시작
+        # 서버 생성 및 시작
+        server = NaverTrendServer(args.port, client_id, client_secret)
         server.start()
         
     except KeyboardInterrupt:
-        print("\n⏹️ 사용자에 의해 중단됨")
-        server.stop()
+        logger.info("서버 종료 요청됨")
     except Exception as e:
-        logger.error(f"서버 실행 오류: {e}")
-        sys.exit(1)
+        logger.error(f"서버 실행 실패: {e}")
+        handle_error(ErrorType.SYSTEM_ERROR, ErrorLevel.ERROR, f"네이버 트렌드 서버 실행 실패: {e}")
 
 if __name__ == "__main__":
     main() 
