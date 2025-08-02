@@ -179,6 +179,40 @@
         .recommendation.sell {
             background: #dc3545;
         }
+        
+        .news-links {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #eee;
+        }
+        
+        .news-links-title {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        .news-link-item {
+            margin: 3px 0;
+        }
+        
+        .news-link {
+            font-size: 11px;
+            color: #667eea;
+            text-decoration: none;
+            padding: 2px 6px;
+            background: #f0f2ff;
+            border-radius: 4px;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        
+        .news-link:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-1px);
+        }
     </style>
 </head>
 <body>
@@ -294,6 +328,23 @@
             
             container.innerHTML = stocks.map(stock => {
                 const recClass = getRecommendationClass(stock.recommendation);
+                // 뉴스 링크 HTML 생성
+                let newsLinksHtml = '';
+                if (stock.recent_news_links && stock.recent_news_links.length > 0) {
+                    newsLinksHtml = `
+                        <div class="news-links">
+                            <div class="news-links-title">📰 관련 뉴스:</div>
+                            ${stock.recent_news_links.map((link, index) => `
+                                <div class="news-link-item">
+                                    <a href="${link}" target="_blank" class="news-link">
+                                        뉴스 ${index + 1} 🔗
+                                    </a>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                }
+                
                 return `
                     <div class="stock-item">
                         <div class="stock-info">
@@ -304,6 +355,7 @@
                             <div class="score-value">${stock.investment_score.toFixed(1)}</div>
                             <div class="recommendation ${recClass}">${stock.recommendation}</div>
                         </div>
+                        ${newsLinksHtml}
                     </div>
                 `;
             }).join('');
