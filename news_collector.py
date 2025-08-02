@@ -6,14 +6,32 @@
 """
 
 import requests
-import json
 import time
-from datetime import datetime, timedelta
-from typing import List, Dict, Optional
-import re
-from dataclasses import dataclass
-from loguru import logger
+import json
 import pandas as pd
+from datetime import datetime
+from dataclasses import dataclass
+from typing import List, Dict, Optional
+from collections import defaultdict
+import re
+from loguru import logger
+import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import jieba
+import nltk
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+
+# NLTK 데이터 다운로드
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
 
 @dataclass
 class NewsItem:
