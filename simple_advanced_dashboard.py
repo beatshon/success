@@ -108,13 +108,27 @@ class SimpleAdvancedDashboard:
         
         result = []
         for _, row in top_stocks.iterrows():
+            # 뉴스 링크 파싱
+            recent_news = []
+            if pd.notna(row.get('recent_news_links')):
+                news_links = row['recent_news_links'].split('|')
+                for link in news_links:
+                    if '|' in link:
+                        title, url = link.split('|', 1)
+                        if title.strip() and url.strip():
+                            recent_news.append({
+                                'title': title.strip(),
+                                'link': url.strip()
+                            })
+            
             stock_data = {
                 'stock_code': row['stock_code'],
                 'stock_name': row['stock_name'],
                 'investment_score': float(row['investment_score']),
                 'sentiment_score': float(row.get('sentiment_score', 0)),
                 'risk_level': row.get('risk_level', 'medium'),
-                'news_count': len(row.get('recent_news_links', '').split('|')) if pd.notna(row.get('recent_news_links')) else 0,
+                'news_count': len(recent_news),
+                'recent_news': recent_news,  # 뉴스 제목과 링크 추가
                 'recommendation': self._get_recommendation(row['investment_score'])
             }
             result.append(stock_data)
