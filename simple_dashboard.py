@@ -186,7 +186,7 @@ class SimpleNewsDashboard:
                         "sentiment_score": stock["sentiment_score"],
                         "recommendation": stock["recommendation"],
                         "risk_level": stock["risk_level"],
-                        "recent_news_links": stock.get("recent_news_links", [])
+                        "recent_news": stock.get("recent_news", [])
                     })
             
             # 상위 10개만 선택
@@ -279,7 +279,7 @@ class SimpleNewsDashboard:
                         "sentiment_score": float(row["sentiment_score"]),
                         "recommendation": str(row["recommendation"]),
                         "risk_level": str(row["risk_level"]),
-                        "recent_news_links": recent_links
+                        "recent_news": recent_news
                     })
                 except Exception as row_error:
                     logger.error(f"행 처리 실패: {row_error}, 행: {row}")

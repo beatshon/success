@@ -328,19 +328,20 @@
             
             container.innerHTML = stocks.map(stock => {
                 const recClass = getRecommendationClass(stock.recommendation);
-                // 뉴스 링크 HTML 생성
+                // 뉴스 제목과 링크 HTML 생성
                 let newsLinksHtml = '';
-                if (stock.recent_news_links && stock.recent_news_links.length > 0) {
+                if (stock.recent_news && stock.recent_news.length > 0) {
                     newsLinksHtml = `
                         <div class="news-links">
                             <div class="news-links-title">📰 관련 뉴스:</div>
-                            ${stock.recent_news_links.map((link, index) => {
+                            ${stock.recent_news.map((news, index) => {
                                 // 링크에서 도메인 추출
-                                const domain = new URL(link).hostname.replace('www.', '');
+                                const domain = new URL(news.link).hostname.replace('www.', '');
+                                const shortTitle = news.title.length > 50 ? news.title.substring(0, 50) + '...' : news.title;
                                 return `
                                     <div class="news-link-item">
-                                        <a href="${link}" target="_blank" class="news-link" title="${link}">
-                                            📰 ${domain} - 뉴스 ${index + 1}
+                                        <a href="${news.link}" target="_blank" class="news-link" title="${news.title}">
+                                            📰 ${shortTitle}
                                         </a>
                                     </div>
                                 `;
