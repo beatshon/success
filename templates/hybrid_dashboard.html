@@ -209,6 +209,8 @@
         .chart-wrapper {
             position: relative;
             height: 300px;
+            display: block;
+            visibility: visible;
         }
 
         /* 색상 테마 */
@@ -455,6 +457,15 @@
 
         // 페이지 로드 시 데이터 로드
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('페이지 로드 완료');
+            console.log('Chart.js 객체 확인:', typeof Chart);
+            
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js가 로드되지 않았습니다!');
+                alert('차트 라이브러리 로드에 실패했습니다. 페이지를 새로고침해주세요.');
+                return;
+            }
+            
             loadDashboardData();
             loadCharts();
             
@@ -481,6 +492,7 @@
                 
                 updateSummaryStats(data.summary);
                 updateTopPerformers(data.top_stocks);
+                updateDetailedData(data.top_stocks); // 상세 분석 결과 업데이트
                 updateRecentActivity([]); // 최근 활동 데이터는 현재 API에 없음
                 
             } catch (error) {
@@ -544,6 +556,54 @@
             container.innerHTML = html;
         }
 
+        // 상세 분석 결과 업데이트
+        function updateDetailedData(stocks) {
+            const container = document.getElementById('detailedData');
+            
+            if (!stocks || stocks.length === 0) {
+                container.innerHTML = '<div class="loading">상세 분석 데이터가 없습니다.</div>';
+                return;
+            }
+            
+            let html = '<table class="data-table">';
+            html += `
+                <thead>
+                    <tr>
+                        <th>종목명</th>
+                        <th>종목코드</th>
+                        <th>섹터</th>
+                        <th>뉴스 점수</th>
+                        <th>기술 점수</th>
+                        <th>종합 점수</th>
+                        <th>신호</th>
+                        <th>분석 근거</th>
+                    </tr>
+                </thead>
+                <tbody>
+            `;
+            
+            stocks.forEach(stock => {
+                const signalClass = stock.final_signal === '매수' ? 'signal-buy' : 
+                                  stock.final_signal === '매도' ? 'signal-sell' : 'signal-hold';
+                
+                html += `
+                    <tr>
+                        <td><strong>${stock.stock_name}</strong></td>
+                        <td>${stock.stock_code}</td>
+                        <td>${stock.sector}</td>
+                        <td>${stock.news_score.toFixed(1)}</td>
+                        <td>${stock.technical_score.toFixed(1)}</td>
+                        <td><strong>${stock.combined_score.toFixed(1)}</strong></td>
+                        <td><span class="signal-badge ${signalClass}">${stock.final_signal}</span></td>
+                        <td style="font-size: 12px; color: #666;">${stock.reasoning}</td>
+                    </tr>
+                `;
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
         // 최근 활동 업데이트
         function updateRecentActivity(activities) {
             const container = document.getElementById('recentActivity');
@@ -571,54 +631,60 @@
 
         // 차트 로드
         async function loadCharts() {
-            await Promise.all([
-                loadSignalChart(),
-                loadSectorChart(),
-                loadComparisonChart()
-            ]);
+            console.log('차트 로드 시작...');
+            try {
+                await Promise.all([
+                    loadSignalChart(),
+                    loadSectorChart(),
+                    loadComparisonChart()
+                ]);
+                console.log('모든 차트 로드 완료');
+            } catch (error) {
+                console.error('차트 로드 중 오류:', error);
+            }
         }
 
         // 신호 분포 차트
         async function loadSignalChart() {
             try {
+                console.log('신호 분포 차트 로드 시작...');
                 const response = await fetch('/api/chart-data/signal_distribution');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
+                console.log('신호 분포 차트 데이터:', data);
                 
                 if (data.error) {
                     showError('signalChart', data.error);
                     return;
                 }
                 
-                const ctx = document.getElementById('signalChart').getContext('2d');
+                const chartElement = document.getElementById('signalChart');
+                if (!chartElement) {
+                    console.error('signalChart 컨테이너를 찾을 수 없습니다.');
+                    return;
+                }
+                
+                const ctx = chartElement.getContext('2d');
                 
                 if (signalChart) {
                     signalChart.destroy();
                 }
                 
                 signalChart = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: data.labels,
-                        datasets: [{
-                            data: data.values,
-                            backgroundColor: ['#28a745', '#dc3545', '#ffc107'],
-                            borderWidth: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom'
-                            }
-                        }
-                    }
+                    type: data.type || 'doughnut',
+                    data: data.data,
+                    options: data.options
                 });
+                
+                console.log('신호 분포 차트 로드 완료');
                 
             } catch (error) {
                 console.error('신호 차트 로드 실패:', error);
-                showError('signalChart', '차트 로드에 실패했습니다.');
+                showError('signalChart', `차트 로드에 실패했습니다: ${error.message}`);
             }
         }
 
@@ -640,26 +706,9 @@
                 }
                 
                 sectorChart = new Chart(ctx, {
-                    type: 'bar',
-                    data: {
-                        labels: data.labels,
-                        datasets: [{
-                            label: '평균 점수',
-                            data: data.values,
-                            backgroundColor: '#0064ff',
-                            borderColor: '#0056cc',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: {
-                                beginAtZero: true
-                            }
-                        }
-                    }
+                    type: data.type || 'bar',
+                    data: data.data,
+                    options: data.options
                 });
                 
             } catch (error) {
@@ -686,28 +735,9 @@
                 }
                 
                 comparisonChart = new Chart(ctx, {
-                    type: 'radar',
-                    data: {
-                        labels: ['뉴스 점수', '기술적 점수', '종합 점수'],
-                        datasets: [{
-                            label: '평균 점수',
-                            data: [data.news_score, data.technical_score, data.combined_score],
-                            backgroundColor: 'rgba(0, 102, 255, 0.2)',
-                            borderColor: '#0064ff',
-                            borderWidth: 2,
-                            pointBackgroundColor: '#0064ff'
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            r: {
-                                beginAtZero: true,
-                                max: 100
-                            }
-                        }
-                    }
+                    type: data.type || 'bar',
+                    data: data.data,
+                    options: data.options
                 });
                 
             } catch (error) {
