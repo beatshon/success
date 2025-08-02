@@ -1645,11 +1645,11 @@ class NaverTrendAnalyzer:
                        '부동산', '금리', '인플레이션', '달러', '원화', '코로나', '백신']
             
             for keyword in keywords:
-                # 랜덤한 트렌드 데이터 생성
+                # 랜덤한 트렌드 데이터 생성 (변화율을 더 크게)
                 base_value = 100 + np.random.normal(0, 20)
-                volume_change = np.random.normal(0, 0.3)  # -30% ~ +30%
+                volume_change = np.random.normal(0, 0.5)  # -50% ~ +50% (더 큰 변화)
                 sentiment_score = np.random.normal(0, 0.5)  # -1 ~ +1
-                momentum_score = np.random.normal(0, 0.2)
+                momentum_score = np.random.normal(0, 0.3)  # 더 큰 모멘텀
                 volatility = abs(np.random.normal(0.1, 0.05))
                 
                 trend_data = TrendData(
@@ -1682,8 +1682,8 @@ class NaverTrendAnalyzer:
             for keyword, trends in self.trend_data.items():
                 if trends:
                     latest_trend = trends[0]
-                    # 변화율이 5% 이상인 키워드만 트렌딩으로 분류
-                    if abs(latest_trend.volume_change) > 0.05:
+                    # 변화율이 2% 이상인 키워드만 트렌딩으로 분류 (임계값 낮춤)
+                    if abs(latest_trend.volume_change) > 0.02:
                         trending_keywords.append({
                             'keyword': keyword,
                             'change_rate': latest_trend.volume_change,
