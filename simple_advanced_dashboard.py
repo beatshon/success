@@ -111,14 +111,17 @@ class SimpleAdvancedDashboard:
             # 뉴스 링크 파싱
             recent_news = []
             if pd.notna(row.get('recent_news_links')):
-                news_links = row['recent_news_links'].split('|')
-                for link in news_links:
-                    if '|' in link:
-                        title, url = link.split('|', 1)
-                        if title.strip() and url.strip():
+                news_links_str = str(row['recent_news_links'])
+                # "제목|링크" 형식으로 분리
+                news_parts = news_links_str.split('|')
+                for i in range(0, len(news_parts)-1, 2):
+                    if i+1 < len(news_parts):
+                        title = news_parts[i].strip()
+                        link = news_parts[i+1].strip()
+                        if title and link and not title.startswith('http'):
                             recent_news.append({
-                                'title': title.strip(),
-                                'link': url.strip()
+                                'title': title,
+                                'link': link
                             })
             
             stock_data = {

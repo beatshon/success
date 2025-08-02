@@ -201,13 +201,26 @@
 
             topStocksContainer.innerHTML = stocks.map(stock => `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; margin-bottom: 8px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
-                    <div>
+                    <div style="flex: 1;">
                         <div style="font-weight: 600; color: #2c3e50;">${stock.stock_name}</div>
                         <div style="font-size: 0.9em; color: #7f8c8d;">${stock.stock_code}</div>
+                        ${stock.recent_news && stock.recent_news.length > 0 ? `
+                            <div style="margin-top: 8px; font-size: 0.85em;">
+                                <div style="color: #3498db; font-weight: 500; margin-bottom: 4px;">📰 관련 뉴스:</div>
+                                ${stock.recent_news.map(news => `
+                                    <div style="margin-bottom: 4px;">
+                                        <a href="${news.link}" target="_blank" style="color: #2980b9; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${news.title}">
+                                            ${news.title.length > 50 ? news.title.substring(0, 50) + '...' : news.title}
+                                        </a>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
                     </div>
-                    <div style="text-align: right;">
+                    <div style="text-align: right; margin-left: 15px;">
                         <div style="font-size: 1.2em; font-weight: bold; color: #27ae60;">${stock.investment_score.toFixed(1)}</div>
                         <div style="font-size: 0.8em; color: #7f8c8d;">${stock.recommendation}</div>
+                        <div style="font-size: 0.8em; color: #7f8c8d;">뉴스 ${stock.news_count}개</div>
                     </div>
                 </div>
             `).join('');
