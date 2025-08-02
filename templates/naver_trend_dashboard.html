@@ -306,11 +306,35 @@
             </div>
         </div>
 
+        <!-- 시장 상황별 투자 전략 -->
+        <div class="trend-card">
+            <h5><i class="fas fa-chart-line"></i> 시장 상황별 투자 전략</h5>
+            <div id="marketStrategyAnalysis" class="mt-3">
+                <!-- 시장 상황별 전략이 여기에 표시됩니다 -->
+            </div>
+        </div>
+
+        <!-- 포트폴리오 추천 -->
+        <div class="trend-card">
+            <h5><i class="fas fa-briefcase"></i> 포트폴리오 추천</h5>
+            <div id="portfolioRecommendation" class="mt-3">
+                <!-- 포트폴리오 추천이 여기에 표시됩니다 -->
+            </div>
+        </div>
+
         <!-- 상관관계 분석 -->
         <div class="trend-card">
-            <h5><i class="fas fa-link"></i> 트렌드-주식 상관관계</h5>
+            <h5><i class="fas fa-link"></i> 시장 상관관계 분석</h5>
             <div id="correlationAnalysis" class="mt-3">
                 <!-- 상관관계 분석 결과가 여기에 표시됩니다 -->
+            </div>
+        </div>
+
+        <!-- 시장 적응 투자 신호 -->
+        <div class="trend-card">
+            <h5><i class="fas fa-adaptive"></i> 시장 적응 투자 신호</h5>
+            <div id="marketAdaptiveSignals" class="mt-3">
+                <!-- 시장 적응 신호들이 여기에 표시됩니다 -->
             </div>
         </div>
     </div>
@@ -326,6 +350,10 @@
         document.addEventListener('DOMContentLoaded', function() {
             initializeCharts();
             loadDashboardData();
+            loadMarketStrategyAnalysis();
+            loadPortfolioRecommendation();
+            loadCorrelationAnalysis();
+            loadMarketAdaptiveSignals();
             startAutoUpdate();
         });
 
@@ -658,49 +686,327 @@
             }
         }
 
-        // 상관관계 분석 로드
-        async function loadCorrelationAnalysis() {
-            const container = document.getElementById('correlationAnalysis');
-            container.innerHTML = '<p class="text-muted">상관관계 분석을 로드 중...</p>';
+        // 시장 상황별 투자 전략 로드
+        async function loadMarketStrategyAnalysis() {
+            const container = document.getElementById('marketStrategyAnalysis');
+            container.innerHTML = '<p class="text-muted">시장 상황을 분석 중...</p>';
             
             try {
-                const keywords = ['삼성전자', 'SK하이닉스', '네이버', '카카오'];
-                let html = '<div class="row">';
+                // 시장 상황 조회
+                const marketResponse = await fetch('/api/market-condition');
+                const marketData = await marketResponse.json();
                 
-                for (const keyword of keywords) {
-                    try {
-                        const response = await fetch(`/api/correlation/${keyword}`);
-                        const data = await response.json();
-                        
-                        if (!data.error) {
-                            const correlationClass = data.correlation_score > 0.5 ? 'correlation-high' : 
-                                                   data.correlation_score > 0.2 ? 'correlation-medium' : 'correlation-low';
-                            
-                            html += `
-                                <div class="col-md-6 mb-3">
-                                    <div class="trend-card">
-                                        <h6>${keyword}</h6>
-                                        <div class="correlation-score ${correlationClass}">
-                                            ${(data.correlation_score * 100).toFixed(1)}%
-                                        </div>
-                                        <p class="mb-1">방향: <span class="badge bg-${data.trend_direction === 'positive' ? 'success' : data.trend_direction === 'negative' ? 'danger' : 'warning'}">${data.trend_direction}</span></p>
-                                        <p class="mb-1">신뢰도: ${(data.confidence_level * 100).toFixed(1)}%</p>
-                                        <p class="mb-0">예측 정확도: ${(data.prediction_accuracy * 100).toFixed(1)}%</p>
-                                    </div>
-                                </div>
-                            `;
-                        }
-                    } catch (error) {
-                        console.error(`상관관계 분석 실패 (${keyword}):`, error);
-                    }
+                if (marketData.error) {
+                    container.innerHTML = '<p class="text-danger">시장 상황 분석 실패</p>';
+                    return;
                 }
                 
-                html += '</div>';
+                const condition = marketData.condition;
+                const description = marketData.description;
+                const strategy = marketData.strategy;
+                
+                // 시장 상황별 전략 조회
+                const strategyResponse = await fetch(`/api/market-strategy/${condition}`);
+                const strategyData = await strategyResponse.json();
+                
+                let html = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="alert alert-info">
+                                <h6><i class="fas fa-info-circle"></i> 현재 시장 상황</h6>
+                                <strong>${condition}</strong><br>
+                                <small>${description}</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="alert alert-warning">
+                                <h6><i class="fas fa-exclamation-triangle"></i> 투자 전략</h6>
+                                <strong>고상관관계 종목: ${(strategy.high_correlation_weight * 100).toFixed(0)}%</strong><br>
+                                <strong>저상관관계 종목: ${(strategy.low_correlation_weight * 100).toFixed(0)}%</strong>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                if (!strategyData.error) {
+                    const riskManagement = strategyData.risk_management;
+                    const marketTiming = strategyData.market_timing;
+                    
+                    html += `
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-shield-alt"></i> 리스크 관리</h6>
+                                <ul class="list-unstyled">
+                                    <li><strong>포지션 크기:</strong> ${riskManagement.position_size}</li>
+                                    <li><strong>손절:</strong> ${riskManagement.stop_loss}</li>
+                                    <li><strong>익절:</strong> ${riskManagement.take_profit}</li>
+                                    <li><strong>중점:</strong> ${riskManagement.focus}</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6><i class="fas fa-clock"></i> 시장 타이밍</h6>
+                                <ul class="list-unstyled">
+                                    <li><strong>진입 전략:</strong> ${marketTiming.entry_strategy}</li>
+                                    <li><strong>청산 전략:</strong> ${marketTiming.exit_strategy}</li>
+                                    <li><strong>리밸런싱:</strong> ${marketTiming.rebalancing}</li>
+                                    <li><strong>주의사항:</strong> ${marketTiming.caution}</li>
+                                </ul>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                console.error('시장 전략 분석 로드 오류:', error);
+                container.innerHTML = '<p class="text-danger">시장 전략 분석 로드 중 오류가 발생했습니다.</p>';
+            }
+        }
+
+        // 포트폴리오 추천 로드
+        async function loadPortfolioRecommendation() {
+            const container = document.getElementById('portfolioRecommendation');
+            container.innerHTML = '<p class="text-muted">포트폴리오 추천을 생성 중...</p>';
+            
+            try {
+                const response = await fetch('/api/portfolio-recommendation');
+                const data = await response.json();
+                
+                if (data.error) {
+                    container.innerHTML = '<p class="text-danger">포트폴리오 추천 생성 실패</p>';
+                    return;
+                }
+                
+                const marketCondition = data.market_condition;
+                const allocation = data.portfolio_allocation;
+                const recommendedStocks = data.recommended_stocks;
+                const riskManagement = data.risk_management;
+                
+                let html = `
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-chart-pie"></i> 포트폴리오 배분</h6>
+                                    <div class="mb-2">
+                                        <strong>고상관관계 종목:</strong> ${(allocation.high_correlation_weight * 100).toFixed(0)}%
+                                    </div>
+                                    <div class="mb-2">
+                                        <strong>저상관관계 종목:</strong> ${(allocation.low_correlation_weight * 100).toFixed(0)}%
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-star"></i> 추천 종목</h6>
+                                    <div class="mb-2">
+                                        <strong>고상관관계:</strong><br>
+                                        ${recommendedStocks.high_correlation.map(stock => `<span class="badge bg-primary me-1">${stock}</span>`).join('')}
+                                    </div>
+                                    <div class="mb-2">
+                                        <strong>저상관관계:</strong><br>
+                                        ${recommendedStocks.low_correlation.map(stock => `<span class="badge bg-success me-1">${stock}</span>`).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h6 class="card-title"><i class="fas fa-cog"></i> 리스크 관리</h6>
+                                    <div class="mb-2">
+                                        <strong>포지션:</strong> ${riskManagement.position_size}
+                                    </div>
+                                    <div class="mb-2">
+                                        <strong>손절:</strong> ${riskManagement.stop_loss}
+                                    </div>
+                                    <div class="mb-2">
+                                        <strong>익절:</strong> ${riskManagement.take_profit}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                console.error('포트폴리오 추천 로드 오류:', error);
+                container.innerHTML = '<p class="text-danger">포트폴리오 추천 로드 중 오류가 발생했습니다.</p>';
+            }
+        }
+
+        // 상관관계 분석 로드 (기존 함수 업데이트)
+        async function loadCorrelationAnalysis() {
+            const container = document.getElementById('correlationAnalysis');
+            container.innerHTML = '<p class="text-muted">시장 상관관계를 분석 중...</p>';
+            
+            try {
+                const response = await fetch('/api/correlation-analysis');
+                const data = await response.json();
+                
+                if (data.error) {
+                    container.innerHTML = '<p class="text-danger">상관관계 분석 실패</p>';
+                    return;
+                }
+                
+                let html = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-chart-bar"></i> 상관관계 분포</h6>
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <div class="h4 text-danger">${data.high_correlation_count}</div>
+                                        <small>높은 상관관계</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <div class="h4 text-warning">${data.medium_correlation_count}</div>
+                                        <small>중간 상관관계</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="text-center">
+                                        <div class="h4 text-success">${data.low_correlation_count}</div>
+                                        <small>낮은 상관관계</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-list"></i> 종목 분류</h6>
+                            <div class="mb-2">
+                                <strong>높은 상관관계:</strong><br>
+                                ${data.high_correlation_stocks.map(stock => `<span class="badge bg-danger me-1">${stock}</span>`).join('')}
+                            </div>
+                            <div class="mb-2">
+                                <strong>낮은 상관관계:</strong><br>
+                                ${data.low_correlation_stocks.map(stock => `<span class="badge bg-success me-1">${stock}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // 상세 분석 결과
+                if (data.detailed_analysis && data.detailed_analysis.length > 0) {
+                    html += `
+                        <div class="mt-3">
+                            <h6><i class="fas fa-table"></i> 상세 분석</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>종목코드</th>
+                                            <th>상관계수</th>
+                                            <th>베타</th>
+                                            <th>수준</th>
+                                            <th>시장 민감도</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                    `;
+                    
+                    data.detailed_analysis.forEach(analysis => {
+                        const correlationClass = analysis.correlation_level === 'HIGH' ? 'text-danger' : 
+                                               analysis.correlation_level === 'MEDIUM' ? 'text-warning' : 'text-success';
+                        
+                        html += `
+                            <tr>
+                                <td><strong>${analysis.stock_code}</strong></td>
+                                <td class="${correlationClass}">${(analysis.correlation * 100).toFixed(1)}%</td>
+                                <td>${analysis.beta.toFixed(2)}</td>
+                                <td><span class="badge bg-${analysis.correlation_level === 'HIGH' ? 'danger' : analysis.correlation_level === 'MEDIUM' ? 'warning' : 'success'}">${analysis.correlation_level}</span></td>
+                                <td>${analysis.market_sensitivity}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    html += `
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
+                
                 container.innerHTML = html;
                 
             } catch (error) {
                 console.error('상관관계 분석 로드 오류:', error);
                 container.innerHTML = '<p class="text-danger">상관관계 분석 로드 중 오류가 발생했습니다.</p>';
+            }
+        }
+
+        // 시장 적응 투자 신호 로드
+        async function loadMarketAdaptiveSignals() {
+            const container = document.getElementById('marketAdaptiveSignals');
+            container.innerHTML = '<p class="text-muted">시장 적응 신호를 생성 중...</p>';
+            
+            try {
+                // 주요 종목들의 시장 적응 신호 수집
+                const stocks = ['005930', '000660', '035420', '035720', '051910', '006400'];
+                const signals = [];
+                
+                for (const stock of stocks) {
+                    try {
+                        const response = await fetch(`/api/market-adaptive-signals/${stock}`);
+                        const data = await response.json();
+                        if (!data.error && data.overall_signal) {
+                            signals.push(data);
+                        }
+                    } catch (error) {
+                        console.error(`시장 적응 신호 로드 실패 (${stock}):`, error);
+                    }
+                }
+                
+                if (signals.length === 0) {
+                    container.innerHTML = '<p class="text-muted">시장 적응 신호가 없습니다.</p>';
+                    return;
+                }
+                
+                let html = '';
+                signals.forEach(signal => {
+                    const signalClass = signal.overall_signal === 'BUY' ? 'signal-buy' : 
+                                      signal.overall_signal === 'SELL' ? 'signal-sell' : 'signal-hold';
+                    
+                    const marketCondition = signal.market_condition || 'UNKNOWN';
+                    const correlationAnalysis = signal.correlation_analysis || {};
+                    
+                    html += `
+                        <div class="trend-card ${signalClass}">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <h6>${signal.stock_code}</h6>
+                                    <p class="mb-1">신호: <strong>${signal.overall_signal}</strong></p>
+                                    <p class="mb-1">신뢰도: ${(signal.confidence * 100).toFixed(1)}%</p>
+                                    <p class="mb-1">시장 상황: <span class="badge bg-info">${marketCondition}</span></p>
+                                </div>
+                                <div class="col-md-4">
+                                    <p class="mb-1">상관계수: ${(correlationAnalysis.correlation * 100).toFixed(1)}%</p>
+                                    <p class="mb-1">베타: ${correlationAnalysis.beta?.toFixed(2) || 'N/A'}</p>
+                                    <p class="mb-1">수준: <span class="badge bg-${correlationAnalysis.correlation_level === 'HIGH' ? 'danger' : correlationAnalysis.correlation_level === 'MEDIUM' ? 'warning' : 'success'}">${correlationAnalysis.correlation_level || 'N/A'}</span></p>
+                                </div>
+                                <div class="col-md-4">
+                                    <small>조정 사유: ${signal.market_adjustment?.reason || 'N/A'}</small><br>
+                                    <small>가중치: ${(signal.market_adjustment?.weight_applied * 100).toFixed(0)}%</small><br>
+                                    <small>업데이트: ${new Date(signal.timestamp).toLocaleString()}</small>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+                
+            } catch (error) {
+                console.error('시장 적응 신호 로드 오류:', error);
+                container.innerHTML = '<p class="text-danger">시장 적응 신호 로드 중 오류가 발생했습니다.</p>';
             }
         }
 
@@ -804,12 +1110,15 @@
             }
         }
 
-        // 자동 업데이트 시작
+        // 자동 업데이트 시작 (기존 함수 업데이트)
         function startAutoUpdate() {
             updateInterval = setInterval(() => {
                 loadDashboardData();
                 loadInvestmentSignals();
+                loadMarketStrategyAnalysis();
+                loadPortfolioRecommendation();
                 loadCorrelationAnalysis();
+                loadMarketAdaptiveSignals();
             }, 60000); // 1분마다 업데이트
         }
 
