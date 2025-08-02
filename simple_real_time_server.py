@@ -1,30 +1,21 @@
 """
-실시간 데이터 서버
-WebSocket 기반 실시간 데이터 전송 및 HTTP API 제공
+간단한 실시간 데이터 서버 (맥 최적화)
+WebSocket 없이 HTTP API만으로 빠른 실행
 """
 
-import asyncio
-import json
 import threading
+import time
 from datetime import datetime
 from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
 from loguru import logger
-import uvicorn
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
-import os
 
 from real_time_data_system import RealTimeDataSystem, VirtualDataGenerator
 
 
-# Flask 앱 (HTTP API용)
+# Flask 앱
 app = Flask(__name__)
 CORS(app)
-
-# FastAPI 앱 (WebSocket용)
-fastapi_app = FastAPI(title="실시간 데이터 서버")
 
 # 실시간 데이터 시스템 인스턴스
 real_time_system = None
@@ -100,19 +91,6 @@ def get_signals():
     return jsonify([signal.__dict__ for signal in real_time_system.signal_cache.values()])
 
 
-@app.route('/api/alerts')
-def get_alerts():
-    """알림 조회"""
-    if not real_time_system:
-        return jsonify({'error': '시스템이 초기화되지 않았습니다.'})
-    
-    limit = request.args.get('limit', 20, type=int)
-    alert_list = list(real_time_system.alert_callbacks)  # 실제로는 별도 캐시가 필요
-    alert_list.sort(key=lambda x: x.timestamp, reverse=True)
-    
-    return jsonify([])  # 임시로 빈 배열 반환
-
-
 @app.route('/api/start-virtual-data')
 def start_virtual_data():
     """가상 데이터 생성 시작"""
@@ -141,78 +119,6 @@ def stop_virtual_data():
     except Exception as e:
         logger.error(f"가상 데이터 중지 오류: {e}")
         return jsonify({'error': str(e)})
-
-
-@app.route('/api/system-control/start')
-def start_system():
-    """시스템 시작"""
-    global real_time_system
-    try:
-        if real_time_system:
-            real_time_system.start()
-            return jsonify({'message': '시스템이 시작되었습니다.'})
-        else:
-            return jsonify({'error': '시스템이 초기화되지 않았습니다.'})
-    except Exception as e:
-        logger.error(f"시스템 시작 오류: {e}")
-        return jsonify({'error': str(e)})
-
-
-@app.route('/api/system-control/stop')
-def stop_system():
-    """시스템 중지"""
-    global real_time_system
-    try:
-        if real_time_system:
-            real_time_system.stop()
-            return jsonify({'message': '시스템이 중지되었습니다.'})
-        else:
-            return jsonify({'error': '시스템이 초기화되지 않았습니다.'})
-    except Exception as e:
-        logger.error(f"시스템 중지 오류: {e}")
-        return jsonify({'error': str(e)})
-
-
-# FastAPI WebSocket 엔드포인트
-@fastapi_app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket 연결 처리"""
-    await websocket.accept()
-    logger.info("WebSocket 클라이언트 연결됨")
-    
-    try:
-        while True:
-            # 클라이언트로부터 메시지 수신
-            data = await websocket.receive_text()
-            message = json.loads(data)
-            
-            # 메시지 타입에 따른 처리
-            if message.get('type') == 'ping':
-                await websocket.send_text(json.dumps({'type': 'pong', 'timestamp': datetime.now().isoformat()}))
-            elif message.get('type') == 'subscribe':
-                # 구독 처리 (실제로는 더 복잡한 로직 필요)
-                await websocket.send_text(json.dumps({
-                    'type': 'subscription_confirmed',
-                    'data_type': message.get('data_type'),
-                    'timestamp': datetime.now().isoformat()
-                }))
-            else:
-                await websocket.send_text(json.dumps({
-                    'type': 'error',
-                    'message': '알 수 없는 메시지 타입',
-                    'timestamp': datetime.now().isoformat()
-                }))
-                
-    except WebSocketDisconnect:
-        logger.info("WebSocket 클라이언트 연결 종료")
-    except Exception as e:
-        logger.error(f"WebSocket 오류: {e}")
-
-
-# 정적 파일 서빙 (디렉토리가 존재할 때만)
-import os
-if os.path.exists("static"):
-    fastapi_app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 def initialize_system():
@@ -249,61 +155,31 @@ def initialize_system():
         # 시스템 시작
         real_time_system.start()
         
+        # 가상 데이터 생성 시작
+        data_generator.start_virtual_data_generation()
+        
         logger.info("실시간 데이터 시스템 초기화 완료")
         return True
         
     except Exception as e:
         logger.error(f"시스템 초기화 오류: {e}")
-        return False
-
-
-def run_websocket_server():
-    """WebSocket 서버 실행 (맥 최적화)"""
-    try:
-        # 맥에서 이벤트 루프 정책 설정
-        if hasattr(asyncio, 'set_event_loop_policy'):
-            try:
-                import asyncio.unix_events
-                asyncio.set_event_loop_policy(asyncio.unix_events.DefaultEventLoopPolicy())
-            except ImportError:
-                pass
-        
-        # 이벤트 루프 생성
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        # WebSocket 서버 시작
-        start_server = real_time_system.start_websocket_server()
-        loop.run_until_complete(start_server)
-        
-        # 가상 데이터 생성 시작
-        data_generator.start_virtual_data_generation()
-        
-        logger.info("WebSocket 서버 시작됨")
-        
-        # 이벤트 루프 실행
-        loop.run_forever()
-        
-    except Exception as e:
-        logger.error(f"WebSocket 서버 실행 오류: {e}")
         import traceback
         logger.error(traceback.format_exc())
+        return False
 
 
 def main():
     """메인 실행 함수"""
+    logger.info("간단한 실시간 데이터 서버 시작 중...")
+    
     # 시스템 초기화
     if not initialize_system():
         logger.error("시스템 초기화 실패")
         return
     
-    # WebSocket 서버를 별도 스레드에서 실행
-    websocket_thread = threading.Thread(target=run_websocket_server, daemon=True)
-    websocket_thread.start()
-    
     # Flask 서버 실행
     try:
-        logger.info("Flask 서버 시작 중...")
+        logger.info("Flask 서버 시작 중... (포트 8081)")
         app.run(host='0.0.0.0', port=8081, debug=False, threaded=True)
     except Exception as e:
         logger.error(f"Flask 서버 실행 오류: {e}")

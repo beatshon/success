@@ -95,10 +95,10 @@ class NaverTrendAnalyzer:
             }
             
             # 데이터 저장소 초기화
-            self.trend_data = {}
+        self.trend_data = {}
             self.news_data = {}
-            self.correlation_data = {}
-            
+        self.correlation_data = {}
+        
             # 분석 상태
             self.analysis_running = False
             self.last_analysis_time = None
@@ -148,7 +148,7 @@ class NaverTrendAnalyzer:
         except Exception as e:
             logger.error(f"네이버 트렌드 분석기 초기화 실패: {e}")
             raise
-    
+        
     def _load_keyword_mapping(self) -> Dict[str, List[str]]:
         """키워드-주식 매핑 로드 (확장 버전)"""
         return {
@@ -407,7 +407,7 @@ class NaverTrendAnalyzer:
             logger.error(f"검색 트렌드 조회 실패 ({keyword}): {e}")
             handle_error(ErrorType.API_ERROR, ErrorLevel.WARNING, f"네이버 검색 트렌드 조회 실패: {e}")
             return {"error": str(e)}
-
+    
     def get_shopping_trend(self, keyword: str) -> Dict:
         """네이버 쇼핑 트렌드 조회"""
         try:
@@ -458,7 +458,7 @@ class NaverTrendAnalyzer:
             logger.error(f"쇼핑 트렌드 조회 실패 ({keyword}): {e}")
             handle_error(ErrorType.API_ERROR, ErrorLevel.WARNING, f"네이버 쇼핑 트렌드 조회 실패: {e}")
             return {"error": str(e)}
-
+    
     def get_news_sentiment(self, keyword: str) -> float:
         """뉴스 감정 분석"""
         try:
@@ -525,7 +525,7 @@ class NaverTrendAnalyzer:
             logger.error(f"뉴스 감정 분석 실패 ({keyword}): {e}")
             handle_error(ErrorType.API_ERROR, ErrorLevel.WARNING, f"뉴스 감정 분석 실패: {e}")
             return 0.0
-
+    
     def _process_trend_data(self, api_result: Dict, keyword: str, trend_type: TrendType) -> TrendData:
         """API 결과를 TrendData로 변환"""
         try:
@@ -738,11 +738,11 @@ class NaverTrendAnalyzer:
                 else:
                     logger.warning(f"검색 트렌드 API 오류 ({keyword}): {response.status}")
                     return None
-                    
+            
         except Exception as e:
             logger.error(f"비동기 검색 트렌드 수집 실패 ({keyword}): {e}")
-            return None
-
+                return None
+            
     async def _collect_news_sentiment_async(self, session: aiohttp.ClientSession, keyword: str):
         """비동기 뉴스 감정 분석 수집"""
         try:
@@ -862,7 +862,7 @@ class NaverTrendAnalyzer:
         except Exception as e:
             logger.error(f"트렌드 상관관계 분석 실패 ({keyword}): {e}")
             return None
-
+    
     def _calculate_prediction_accuracy(self, trend_history: List[TrendData], stock_data: Dict) -> float:
         """예측 정확도 계산"""
         try:
@@ -972,7 +972,7 @@ class NaverTrendAnalyzer:
                     )
                     
                     signals.append({
-                        'keyword': keyword,
+                            'keyword': keyword,
                         'signal_score': signal_score,
                         'sentiment_score': trend.sentiment_score,
                         'momentum_score': trend.momentum_score,
@@ -1003,7 +1003,7 @@ class NaverTrendAnalyzer:
                 overall_signal = 'BUY'
             elif overall_signal_score < -0.2:
                 overall_signal = 'SELL'
-            else:
+                    else:
                 overall_signal = 'HOLD'
             
             # 신뢰도 계산
@@ -1043,7 +1043,7 @@ class NaverTrendAnalyzer:
             
             for keyword in virtual_keywords:
                 signals.append({
-                    'keyword': keyword,
+                            'keyword': keyword,
                     'signal_score': np.random.normal(0, 0.2),
                     'sentiment_score': np.random.normal(0, 0.3),
                     'momentum_score': np.random.normal(0, 0.2),
@@ -1134,7 +1134,7 @@ class NaverTrendAnalyzer:
         except Exception as e:
             logger.error(f"시장 상관관계 분석 실패 ({stock_code}): {e}")
             return None
-
+    
     def determine_market_condition(self, market_data: Dict) -> str:
         """시장 상황 판단"""
         try:
@@ -1510,7 +1510,7 @@ class NaverTrendAnalyzer:
         except Exception as e:
             logger.error(f"트렌딩 키워드 찾기 실패: {e}")
             return []
-
+    
     def _get_sentiment_level(self, score: float) -> str:
         """감정 수준 판단"""
         if score > 0.3:
@@ -1519,7 +1519,7 @@ class NaverTrendAnalyzer:
             return 'NEGATIVE'
         else:
             return 'NEUTRAL'
-
+    
     def start_continuous_analysis(self):
         """연속 분석 시작"""
         if self.analysis_running:
@@ -1531,14 +1531,14 @@ class NaverTrendAnalyzer:
         self.analysis_thread.daemon = True
         self.analysis_thread.start()
         logger.info("네이버 트렌드 연속 분석이 시작되었습니다.")
-
+    
     def stop_continuous_analysis(self):
         """연속 분석 중지"""
         self.analysis_running = False
         if self.analysis_thread:
             self.analysis_thread.join(timeout=5)
         logger.info("네이버 트렌드 연속 분석이 중지되었습니다.")
-
+    
     def _analysis_worker(self):
         """분석 워커 스레드"""
         while self.analysis_running:
@@ -1750,8 +1750,8 @@ def main():
         except KeyboardInterrupt:
             logger.info("프로그램 종료 요청됨")
         finally:
-            analyzer.stop_continuous_analysis()
-            
+        analyzer.stop_continuous_analysis()
+        
     except Exception as e:
         logger.error(f"메인 함수 오류: {e}")
         handle_error(ErrorType.SYSTEM_ERROR, ErrorLevel.ERROR, f"네이버 트렌드 분석기 오류: {e}")
