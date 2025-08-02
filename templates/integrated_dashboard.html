@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎯 키움 트레이딩 허브</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        /* 토스 스타일 헤더 */
+        .header {
+            background: linear-gradient(135deg, #0064ff 0%, #5b8cff 100%);
+            color: white;
+            padding: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: rgba(255,255,255,0.2);
+            color: white;
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-primary:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #0064ff;
+        }
+
+        .btn-secondary:hover {
+            background: #f8f9fa;
+            transform: translateY(-2px);
+        }
+
+        /* 메인 컨테이너 */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* 대시보드 카드 */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #333;
+        }
+
+        .card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: white;
+        }
+
+        .icon-blue { background: linear-gradient(135deg, #0064ff, #5b8cff); }
+        .icon-green { background: linear-gradient(135deg, #00c851, #00e676); }
+        .icon-orange { background: linear-gradient(135deg, #ff6b35, #ff8a65); }
+        .icon-purple { background: linear-gradient(135deg, #9c27b0, #ba68c8); }
+
+        /* 통계 카드 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: #0064ff;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+            font-weight: 500;
+        }
+
+        /* 활동 피드 */
+        .activity-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .activity-item:last-child {
+            border-bottom: none;
+        }
+
+        .activity-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: white;
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .activity-description {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .activity-time {
+            font-size: 12px;
+            color: #999;
+        }
+
+        /* 상위 종목 리스트 */
+        .stock-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .stock-item:last-child {
+            border-bottom: none;
+        }
+
+        .stock-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .stock-name {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .stock-score {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .signal-badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .signal-buy {
+            background: #e8f5e8;
+            color: #00c851;
+        }
+
+        .signal-sell {
+            background: #ffeaea;
+            color: #ff4444;
+        }
+
+        .signal-hold {
+            background: #fff3e0;
+            color: #ff9800;
+        }
+
+        /* 섹터 분포 */
+        .sector-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+        }
+
+        .sector-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .sector-count {
+            background: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #666;
+        }
+
+        /* 최근 거래 */
+        .trade-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .trade-item:last-child {
+            border-bottom: none;
+        }
+
+        .trade-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .trade-type {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .trade-buy {
+            background: #e8f5e8;
+            color: #00c851;
+        }
+
+        .trade-sell {
+            background: #ffeaea;
+            color: #ff4444;
+        }
+
+        /* 반응형 디자인 */
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        /* 로딩 애니메이션 */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #0064ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 새로고침 버튼 */
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: #0064ff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0,100,255,0.3);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+
+        .refresh-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 25px rgba(0,100,255,0.4);
+        }
+    </style>
+</head>
+<body>
+    <!-- 헤더 -->
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <i class="fas fa-chart-line"></i>
+                키움 트레이딩 허브
+            </div>
+            <div class="header-actions">
+                <a href="/hybrid" class="btn btn-primary">
+                    <i class="fas fa-chart-bar"></i>
+                    하이브리드 분석
+                </a>
+                <a href="/simulation" class="btn btn-secondary">
+                    <i class="fas fa-play-circle"></i>
+                    시뮬레이션
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- 메인 컨테이너 -->
+    <div class="container">
+        <!-- 개요 통계 -->
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">하이브리드 분석</h2>
+                    <div class="card-icon icon-blue">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                </div>
+                <div class="stats-grid" id="hybridStats">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        데이터 로딩 중...
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">시뮬레이션 성과</h2>
+                    <div class="card-icon icon-green">
+                        <i class="fas fa-play-circle"></i>
+                    </div>
+                </div>
+                <div class="stats-grid" id="simulationStats">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        데이터 로딩 중...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 상세 정보 -->
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">상위 성과 종목</h2>
+                    <div class="card-icon icon-orange">
+                        <i class="fas fa-trophy"></i>
+                    </div>
+                </div>
+                <div id="topStocks">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        데이터 로딩 중...
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">최근 활동</h2>
+                    <div class="card-icon icon-purple">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                </div>
+                <div id="recentActivity">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        데이터 로딩 중...
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 추가 정보 -->
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">섹터 분포</h2>
+                    <div class="card-icon icon-blue">
+                        <i class="fas fa-building"></i>
+                    </div>
+                </div>
+                <div id="sectorDistribution">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        데이터 로딩 중...
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">최근 거래</h2>
+                    <div class="card-icon icon-green">
+                        <i class="fas fa-exchange-alt"></i>
+                    </div>
+                </div>
+                <div id="recentTrades">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        데이터 로딩 중...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 새로고침 버튼 -->
+    <button class="refresh-btn" onclick="refreshData()">
+        <i class="fas fa-sync-alt"></i>
+    </button>
+
+    <script>
+        // 페이지 로드 시 데이터 로드
+        document.addEventListener('DOMContentLoaded', function() {
+            loadOverviewData();
+            loadQuickStats();
+            loadRecentActivity();
+            
+            // 30초마다 자동 새로고침
+            setInterval(refreshData, 30000);
+        });
+
+        // 데이터 새로고침
+        function refreshData() {
+            loadOverviewData();
+            loadQuickStats();
+            loadRecentActivity();
+        }
+
+        // 개요 데이터 로드
+        async function loadOverviewData() {
+            try {
+                const response = await fetch('/api/overview');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('개요 데이터 로드 실패:', data.error);
+                    return;
+                }
+                
+                updateHybridStats(data.hybrid_analysis);
+                updateSimulationStats(data.simulation);
+                
+            } catch (error) {
+                console.error('개요 데이터 로드 실패:', error);
+            }
+        }
+
+        // 하이브리드 통계 업데이트
+        function updateHybridStats(hybridData) {
+            const container = document.getElementById('hybridStats');
+            container.innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-value">${hybridData.total_stocks}</div>
+                    <div class="stat-label">총 종목</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${hybridData.buy_signals}</div>
+                    <div class="stat-label">매수 신호</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${hybridData.sell_signals}</div>
+                    <div class="stat-label">매도 신호</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${hybridData.hold_signals}</div>
+                    <div class="stat-label">관망 신호</div>
+                </div>
+            `;
+        }
+
+        // 시뮬레이션 통계 업데이트
+        function updateSimulationStats(simulationData) {
+            const container = document.getElementById('simulationStats');
+            container.innerHTML = `
+                <div class="stat-item">
+                    <div class="stat-value">${simulationData.total_return.toFixed(2)}%</div>
+                    <div class="stat-label">총 수익률</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${simulationData.win_rate.toFixed(1)}%</div>
+                    <div class="stat-label">승률</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${simulationData.total_trades}</div>
+                    <div class="stat-label">총 거래</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value">${simulationData.max_drawdown.toFixed(2)}%</div>
+                    <div class="stat-label">최대 낙폭</div>
+                </div>
+            `;
+        }
+
+        // 빠른 통계 로드
+        async function loadQuickStats() {
+            try {
+                const response = await fetch('/api/quick-stats');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('빠른 통계 로드 실패:', data.error);
+                    return;
+                }
+                
+                updateTopStocks(data.top_performers);
+                updateSectorDistribution(data.sector_distribution);
+                updateRecentTrades(data.recent_trades);
+                
+            } catch (error) {
+                console.error('빠른 통계 로드 실패:', error);
+            }
+        }
+
+        // 상위 종목 업데이트
+        function updateTopStocks(stocks) {
+            const container = document.getElementById('topStocks');
+            
+            if (!stocks || stocks.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666;">데이터가 없습니다.</p>';
+                return;
+            }
+            
+            let html = '';
+            stocks.forEach(stock => {
+                const signalClass = stock.signal === '매수' ? 'signal-buy' : 
+                                  stock.signal === '매도' ? 'signal-sell' : 'signal-hold';
+                
+                html += `
+                    <div class="stock-item">
+                        <div class="stock-info">
+                            <div>
+                                <div class="stock-name">${stock.name}</div>
+                                <div class="stock-score">점수: ${stock.score}</div>
+                            </div>
+                        </div>
+                        <span class="signal-badge ${signalClass}">${stock.signal}</span>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // 섹터 분포 업데이트
+        function updateSectorDistribution(sectors) {
+            const container = document.getElementById('sectorDistribution');
+            
+            if (!sectors || Object.keys(sectors).length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666;">데이터가 없습니다.</p>';
+                return;
+            }
+            
+            let html = '';
+            Object.entries(sectors).forEach(([sector, count]) => {
+                html += `
+                    <div class="sector-item">
+                        <span class="sector-name">${sector}</span>
+                        <span class="sector-count">${count}개</span>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // 최근 거래 업데이트
+        function updateRecentTrades(trades) {
+            const container = document.getElementById('recentTrades');
+            
+            if (!trades || trades.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666;">데이터가 없습니다.</p>';
+                return;
+            }
+            
+            let html = '';
+            trades.forEach(trade => {
+                const tradeClass = trade.type === '매수' ? 'trade-buy' : 'trade-sell';
+                
+                html += `
+                    <div class="trade-item">
+                        <div class="trade-info">
+                            <span class="trade-type ${tradeClass}">${trade.type}</span>
+                            <div>
+                                <div style="font-weight: 600;">${trade.stock}</div>
+                                <div style="font-size: 12px; color: #666;">${trade.date}</div>
+                            </div>
+                        </div>
+                        <div style="font-weight: 600;">${trade.amount}주</div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // 최근 활동 로드
+        async function loadRecentActivity() {
+            try {
+                const response = await fetch('/api/recent-activity');
+                const data = await response.json();
+                
+                if (data.error) {
+                    console.error('최근 활동 로드 실패:', data.error);
+                    return;
+                }
+                
+                updateRecentActivity(data.activities);
+                
+            } catch (error) {
+                console.error('최근 활동 로드 실패:', error);
+            }
+        }
+
+        // 최근 활동 업데이트
+        function updateRecentActivity(activities) {
+            const container = document.getElementById('recentActivity');
+            
+            if (!activities || activities.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: #666;">활동이 없습니다.</p>';
+                return;
+            }
+            
+            let html = '';
+            activities.forEach(activity => {
+                const iconClass = activity.type === 'analysis' ? 'icon-blue' : 'icon-green';
+                const icon = activity.type === 'analysis' ? 'fas fa-chart-bar' : 'fas fa-play-circle';
+                
+                html += `
+                    <div class="activity-item">
+                        <div class="activity-icon ${iconClass}">
+                            <i class="${icon}"></i>
+                        </div>
+                        <div class="activity-content">
+                            <div class="activity-title">${activity.title}</div>
+                            <div class="activity-description">${activity.description}</div>
+                        </div>
+                        <div class="activity-time">${activity.time}</div>
+                    </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+    </script>
+</body>
+</html> 
