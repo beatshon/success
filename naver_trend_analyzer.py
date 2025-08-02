@@ -801,305 +801,487 @@ class NaverTrendAnalyzer:
     def analyze_trend_correlation(self, keyword: str, stock_data: Dict) -> StockTrendCorrelation:
         """트렌드-주식 상관관계 분석"""
         try:
-            # 검색 트렌드 데이터
-            search_trend = self.get_search_trend(keyword)
-            if not search_trend:
+            # 과거 트렌드 데이터 조회
+            trend_history = self.get_historical_trend_data(keyword, days=30)
+            
+            if not trend_history or not stock_data:
                 return None
             
-            # 트렌드 데이터 추출
-            trend_values = []
-            dates = []
+            # 주식 데이터와 트렌드 데이터 정렬
+            trend_values = [t.value for t in trend_history]
+            stock_prices = stock_data.get('prices', [])
             
-            for item in search_trend.get('results', [{}])[0].get('data', []):
-                trend_values.append(item.get('ratio', 0))
-                dates.append(item.get('period', ''))
-            
-            # 주식 데이터와 상관관계 계산
-            stock_prices = []
-            for date in dates:
-                if date in stock_data:
-                    stock_prices.append(stock_data[date])
-                else:
-                    stock_prices.append(0)
-            
-            if len(trend_values) < 2 or len(stock_prices) < 2:
+            if len(trend_values) < 10 or len(stock_prices) < 10:
                 return None
             
-            # 상관계수 계산
+            # 상관관계 계산
+            min_length = min(len(trend_values), len(stock_prices))
+            trend_values = trend_values[-min_length:]
+            stock_prices = stock_prices[-min_length:]
+            
+            # 피어슨 상관계수 계산
             correlation = np.corrcoef(trend_values, stock_prices)[0, 1]
             
             if np.isnan(correlation):
                 correlation = 0.0
             
             # 트렌드 방향 결정
-            if correlation > self.correlation_threshold:
+            recent_trend = trend_values[-1] - trend_values[0] if len(trend_values) > 1 else 0
+            if recent_trend > 0:
                 trend_direction = "positive"
-            elif correlation < -self.correlation_threshold:
+            elif recent_trend < 0:
                 trend_direction = "negative"
             else:
                 trend_direction = "neutral"
             
-            # 신뢰도 계산
-            confidence = min(abs(correlation), 1.0)
+            # 신뢰도 계산 (데이터 품질 기반)
+            confidence_level = min(abs(correlation), 1.0)
             
-            return StockTrendCorrelation(
-                stock_code=stock_data.get('code', ''),
-                stock_name=stock_data.get('name', ''),
+            # 영향도 점수 계산
+            impact_score = abs(correlation) * (len(trend_values) / 30)  # 데이터 양 고려
+            
+            # 예측 정확도 (과거 데이터 기반)
+            prediction_accuracy = self._calculate_prediction_accuracy(trend_history, stock_data)
+            
+            # 관련 주식 코드들
+            related_stocks = self.keyword_stock_mapping.get(keyword, [])
+            
+            correlation_data = StockTrendCorrelation(
+                stock_code=related_stocks[0] if related_stocks else "",
+                stock_name=keyword,
                 keyword=keyword,
                 correlation_score=correlation,
                 trend_direction=trend_direction,
-                confidence_level=confidence,
-                last_updated=datetime.now()
+                confidence_level=confidence_level,
+                last_updated=datetime.now(),
+                impact_score=impact_score,
+                prediction_accuracy=prediction_accuracy
             )
             
+            # 데이터베이스에 저장
+            self._save_correlation_data(correlation_data)
+            
+            return correlation_data
+            
         except Exception as e:
-            logger.error(f"상관관계 분석 실패: {keyword} - {e}")
+            logger.error(f"트렌드 상관관계 분석 실패 ({keyword}): {e}")
             return None
-    
+
+    def _calculate_prediction_accuracy(self, trend_history: List[TrendData], stock_data: Dict) -> float:
+        """예측 정확도 계산"""
+        try:
+            if len(trend_history) < 10:
+                return 0.0
+            
+            # 트렌드 변화율과 주식 가격 변화율 비교
+            trend_changes = []
+            stock_changes = []
+            
+            for i in range(1, len(trend_history)):
+                trend_change = (trend_history[i].value - trend_history[i-1].value) / trend_history[i-1].value
+                trend_changes.append(trend_change)
+            
+            stock_prices = stock_data.get('prices', [])
+            for i in range(1, len(stock_prices)):
+                stock_change = (stock_prices[i] - stock_prices[i-1]) / stock_prices[i-1]
+                stock_changes.append(stock_change)
+            
+            # 방향 일치도 계산
+            correct_predictions = 0
+            total_predictions = 0
+            
+            min_length = min(len(trend_changes), len(stock_changes))
+            for i in range(min_length):
+                if (trend_changes[i] > 0 and stock_changes[i] > 0) or \
+                   (trend_changes[i] < 0 and stock_changes[i] < 0):
+                    correct_predictions += 1
+                total_predictions += 1
+            
+            accuracy = correct_predictions / total_predictions if total_predictions > 0 else 0.0
+            return accuracy
+            
+        except Exception as e:
+            logger.error(f"예측 정확도 계산 실패: {e}")
+            return 0.0
+
+    def _save_correlation_data(self, correlation_data: StockTrendCorrelation):
+        """상관관계 데이터를 데이터베이스에 저장"""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute('''
+                INSERT OR REPLACE INTO correlation_data 
+                (stock_code, stock_name, keyword, correlation_score, trend_direction, 
+                 confidence_level, impact_score, prediction_accuracy, last_updated)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                correlation_data.stock_code,
+                correlation_data.stock_name,
+                correlation_data.keyword,
+                correlation_data.correlation_score,
+                correlation_data.trend_direction,
+                correlation_data.confidence_level,
+                correlation_data.impact_score,
+                correlation_data.prediction_accuracy,
+                correlation_data.last_updated.isoformat()
+            ))
+            
+            conn.commit()
+            conn.close()
+            
+            # 메모리에도 저장
+            key = f"{correlation_data.stock_code}_{correlation_data.keyword}"
+            self.correlation_data[key] = correlation_data
+            
+        except Exception as e:
+            logger.error(f"상관관계 데이터 저장 실패: {e}")
+
     def get_investment_signals(self, stock_code: str) -> Dict:
         """투자 신호 생성"""
         try:
             signals = {
                 'stock_code': stock_code,
                 'signals': [],
-                'overall_score': 0.0,
-                'recommendation': 'HOLD',
-                'timestamp': datetime.now()
+                'overall_signal': 'HOLD',
+                'confidence': 0.0,
+                'timestamp': datetime.now().isoformat()
             }
             
-            # 관련 키워드 찾기
+            # 해당 주식과 관련된 키워드들 찾기
             related_keywords = []
-            for keyword, stocks in self.keyword_stock_mapping.items():
-                if stock_code in stocks:
+            for keyword, stock_codes in self.keyword_stock_mapping.items():
+                if stock_code in stock_codes:
                     related_keywords.append(keyword)
+            
+            if not related_keywords:
+                return signals
             
             total_score = 0.0
             signal_count = 0
             
             for keyword in related_keywords:
-                # 검색 트렌드 분석
-                search_trend = self.get_search_trend(keyword)
-                if search_trend:
-                    trend_data = search_trend.get('results', [{}])[0].get('data', [])
-                    if trend_data:
-                        recent_trend = trend_data[-1].get('ratio', 0)
-                        prev_trend = trend_data[-2].get('ratio', 0) if len(trend_data) > 1 else 0
-                        
-                        trend_change = recent_trend - prev_trend
-                        
-                        if trend_change > 10:  # 10% 이상 증가
-                            signals['signals'].append({
-                                'type': 'SEARCH_TREND_UP',
-                                'keyword': keyword,
-                                'value': trend_change,
-                                'message': f'"{keyword}" 검색량 급증 (+{trend_change:.1f}%)'
-                            })
-                            total_score += 0.3
-                            signal_count += 1
-                        elif trend_change < -10:  # 10% 이상 감소
-                            signals['signals'].append({
-                                'type': 'SEARCH_TREND_DOWN',
-                                'keyword': keyword,
-                                'value': trend_change,
-                                'message': f'"{keyword}" 검색량 감소 ({trend_change:.1f}%)'
-                            })
-                            total_score -= 0.3
-                            signal_count += 1
+                # 최신 트렌드 데이터 조회
+                recent_trends = self.get_historical_trend_data(keyword, days=7)
                 
-                # 뉴스 감정 분석
-                sentiment = self.get_news_sentiment(keyword)
-                if abs(sentiment) > 0.2:
-                    if sentiment > 0:
-                        signals['signals'].append({
-                            'type': 'POSITIVE_SENTIMENT',
-                            'keyword': keyword,
-                            'value': sentiment,
-                            'message': f'"{keyword}" 관련 긍정적 뉴스'
-                        })
-                        total_score += 0.2
-                    else:
-                        signals['signals'].append({
-                            'type': 'NEGATIVE_SENTIMENT',
-                            'keyword': keyword,
-                            'value': sentiment,
-                            'message': f'"{keyword}" 관련 부정적 뉴스'
-                        })
-                        total_score -= 0.2
-                    signal_count += 1
+                if not recent_trends:
+                    continue
+                
+                latest_trend = recent_trends[0]
+                
+                # 신호 점수 계산
+                signal_score = self._calculate_signal_score(latest_trend)
+                
+                # 신호 생성
+                if signal_score > 0.3:
+                    signal_type = 'BUY'
+                elif signal_score < -0.3:
+                    signal_type = 'SELL'
+                else:
+                    signal_type = 'HOLD'
+                
+                signal = {
+                    'keyword': keyword,
+                    'signal_type': signal_type,
+                    'score': signal_score,
+                    'trend_value': latest_trend.value,
+                    'sentiment': latest_trend.sentiment_score,
+                    'momentum': latest_trend.momentum_score,
+                    'volatility': latest_trend.volatility,
+                    'timestamp': latest_trend.timestamp.isoformat()
+                }
+                
+                signals['signals'].append(signal)
+                total_score += signal_score
+                signal_count += 1
             
-            # 전체 점수 계산
+            # 전체 신호 결정
             if signal_count > 0:
-                signals['overall_score'] = total_score / signal_count
-            
-            # 투자 추천 결정
-            if signals['overall_score'] > 0.3:
-                signals['recommendation'] = 'BUY'
-            elif signals['overall_score'] < -0.3:
-                signals['recommendation'] = 'SELL'
-            else:
-                signals['recommendation'] = 'HOLD'
+                avg_score = total_score / signal_count
+                signals['confidence'] = min(abs(avg_score), 1.0)
+                
+                if avg_score > 0.2:
+                    signals['overall_signal'] = 'BUY'
+                elif avg_score < -0.2:
+                    signals['overall_signal'] = 'SELL'
+                else:
+                    signals['overall_signal'] = 'HOLD'
             
             return signals
             
         except Exception as e:
-            logger.error(f"투자 신호 생성 실패: {stock_code} - {e}")
-            return None
-    
+            logger.error(f"투자 신호 생성 실패 ({stock_code}): {e}")
+            return {'error': str(e)}
+
+    def _calculate_signal_score(self, trend_data: TrendData) -> float:
+        """신호 점수 계산"""
+        try:
+            # 가중 평균 계산
+            weights = {
+                'sentiment': 0.3,
+                'momentum': 0.3,
+                'volume_change': 0.2,
+                'volatility': 0.2
+            }
+            
+            # 감정 점수 (-1 ~ 1)
+            sentiment_score = trend_data.sentiment_score
+            
+            # 모멘텀 점수 (-1 ~ 1)
+            momentum_score = trend_data.momentum_score
+            
+            # 거래량 변화 점수 (-1 ~ 1)
+            volume_score = min(max(trend_data.volume_change / 50, -1), 1)
+            
+            # 변동성 점수 (낮을수록 좋음, -1 ~ 1)
+            volatility_score = -min(trend_data.volatility, 1.0)
+            
+            # 가중 평균
+            final_score = (
+                sentiment_score * weights['sentiment'] +
+                momentum_score * weights['momentum'] +
+                volume_score * weights['volume_change'] +
+                volatility_score * weights['volatility']
+            )
+            
+            return min(max(final_score, -1), 1)  # -1 ~ 1 범위로 제한
+            
+        except Exception as e:
+            logger.error(f"신호 점수 계산 실패: {e}")
+            return 0.0
+
     def get_market_sentiment(self) -> Dict:
         """전체 시장 감정 분석"""
         try:
-            market_keywords = [
-                "주식", "투자", "증시", "코스피", "코스닥",
-                "경제", "금리", "인플레이션", "달러", "원화"
-            ]
-            
-            sentiment_scores = []
-            
-            for keyword in market_keywords:
-                sentiment = self.get_news_sentiment(keyword)
-                sentiment_scores.append(sentiment)
-            
-            avg_sentiment = np.mean(sentiment_scores) if sentiment_scores else 0.0
-            
-            return {
-                'market_sentiment': avg_sentiment,
-                'sentiment_level': self._get_sentiment_level(avg_sentiment),
-                'keywords_analyzed': market_keywords,
-                'timestamp': datetime.now()
+            market_sentiment = {
+                'overall_sentiment': 0.0,
+                'sector_sentiments': {},
+                'trending_keywords': [],
+                'risk_level': 'MEDIUM',
+                'timestamp': datetime.now().isoformat()
             }
+            
+            # 섹터별 감정 분석
+            sectors = {
+                'technology': ['삼성전자', 'SK하이닉스', '네이버', '카카오', 'LG전자'],
+                'automotive': ['현대차', '기아', 'LG화학', '삼성SDI'],
+                'finance': ['KB금융', '신한지주', '하나금융지주', '우리금융지주'],
+                'biotech': ['삼성바이오로직스', '셀트리온', '한미약품', '유한양행'],
+                'retail': ['신세계', '롯데쇼핑', '아모레퍼시픽', 'LG생활건강']
+            }
+            
+            sector_scores = {}
+            
+            for sector, keywords in sectors.items():
+                sector_score = 0.0
+                keyword_count = 0
+                
+                for keyword in keywords:
+                    recent_trends = self.get_historical_trend_data(keyword, days=3)
+                    if recent_trends:
+                        latest_trend = recent_trends[0]
+                        sector_score += latest_trend.sentiment_score
+                        keyword_count += 1
+                
+                if keyword_count > 0:
+                    avg_score = sector_score / keyword_count
+                    sector_scores[sector] = avg_score
+                    market_sentiment['sector_sentiments'][sector] = {
+                        'score': avg_score,
+                        'level': self._get_sentiment_level(avg_score)
+                    }
+            
+            # 전체 감정 점수
+            if sector_scores:
+                market_sentiment['overall_sentiment'] = sum(sector_scores.values()) / len(sector_scores)
+            
+            # 트렌딩 키워드 찾기
+            trending_keywords = self._find_trending_keywords()
+            market_sentiment['trending_keywords'] = trending_keywords
+            
+            # 리스크 레벨 결정
+            overall_sentiment = market_sentiment['overall_sentiment']
+            if overall_sentiment > 0.3:
+                market_sentiment['risk_level'] = 'LOW'
+            elif overall_sentiment < -0.3:
+                market_sentiment['risk_level'] = 'HIGH'
+            else:
+                market_sentiment['risk_level'] = 'MEDIUM'
+            
+            return market_sentiment
             
         except Exception as e:
             logger.error(f"시장 감정 분석 실패: {e}")
-            return None
-    
+            return {'error': str(e)}
+
+    def _find_trending_keywords(self) -> List[Dict]:
+        """트렌딩 키워드 찾기"""
+        try:
+            trending_keywords = []
+            
+            for keyword in self.monitoring_keywords:
+                recent_trends = self.get_historical_trend_data(keyword, days=3)
+                
+                if len(recent_trends) >= 2:
+                    latest = recent_trends[0]
+                    previous = recent_trends[1]
+                    
+                    # 변화율 계산
+                    change_rate = ((latest.value - previous.value) / previous.value * 100) if previous.value > 0 else 0
+                    
+                    # 트렌딩 기준: 변화율이 10% 이상
+                    if abs(change_rate) >= 10:
+                        trending_keywords.append({
+                            'keyword': keyword,
+                            'change_rate': change_rate,
+                            'trend': 'up' if change_rate > 0 else 'down',
+                            'sentiment': latest.sentiment_score,
+                            'value': latest.value
+                        })
+            
+            # 변화율 기준으로 정렬
+            trending_keywords.sort(key=lambda x: abs(x['change_rate']), reverse=True)
+            
+            return trending_keywords[:10]  # 상위 10개만 반환
+            
+        except Exception as e:
+            logger.error(f"트렌딩 키워드 찾기 실패: {e}")
+            return []
+
     def _get_sentiment_level(self, score: float) -> str:
-        """감정 점수 레벨 반환"""
+        """감정 수준 판단"""
         if score > 0.3:
-            return "매우 긍정적"
-        elif score > 0.1:
-            return "긍정적"
-        elif score > -0.1:
-            return "중립"
-        elif score > -0.3:
-            return "부정적"
+            return 'POSITIVE'
+        elif score < -0.3:
+            return 'NEGATIVE'
         else:
-            return "매우 부정적"
-    
+            return 'NEUTRAL'
+
     def start_continuous_analysis(self):
         """연속 분석 시작"""
         if self.running:
+            logger.warning("이미 분석이 실행 중입니다.")
             return
         
         self.running = True
-        self.analysis_thread = threading.Thread(target=self._analysis_worker, daemon=True)
+        self.analysis_thread = threading.Thread(target=self._analysis_worker)
+        self.analysis_thread.daemon = True
         self.analysis_thread.start()
-        
-        logger.info("네이버 트렌드 연속 분석 시작")
-    
+        logger.info("네이버 트렌드 연속 분석이 시작되었습니다.")
+
     def stop_continuous_analysis(self):
         """연속 분석 중지"""
         self.running = False
         if self.analysis_thread:
             self.analysis_thread.join(timeout=5)
-        
-        logger.info("네이버 트렌드 연속 분석 중지")
-    
+        logger.info("네이버 트렌드 연속 분석이 중지되었습니다.")
+
     def _analysis_worker(self):
         """분석 워커 스레드"""
         while self.running:
             try:
-                # 주요 종목들에 대한 투자 신호 생성
-                major_stocks = ["005930", "000660", "035420", "035720", "051910"]
+                # 실시간 데이터 수집
+                asyncio.run(self.collect_real_time_data())
                 
-                for stock_code in major_stocks:
-                    signals = self.get_investment_signals(stock_code)
-                    if signals:
-                        self.trend_data[stock_code] = signals
-                        logger.info(f"투자 신호 생성: {stock_code} - {signals['recommendation']}")
+                # 상관관계 분석 업데이트
+                self._update_correlations()
                 
-                # 시장 감정 분석
-                market_sentiment = self.get_market_sentiment()
-                if market_sentiment:
-                    self.trend_data['market'] = market_sentiment
-                    logger.info(f"시장 감정: {market_sentiment['sentiment_level']}")
-                
-                # 분석 간격 대기
+                # 잠시 대기
                 time.sleep(self.analysis_interval)
                 
             except Exception as e:
-                logger.error(f"트렌드 분석 오류: {e}")
-                time.sleep(300)  # 5분 대기 후 재시도
-    
+                logger.error(f"분석 워커 오류: {e}")
+                time.sleep(60)  # 오류 시 1분 대기
+
+    def _update_correlations(self):
+        """상관관계 데이터 업데이트"""
+        try:
+            # 주요 키워드들에 대해 상관관계 분석 수행
+            for keyword in self.monitoring_keywords[:10]:  # 상위 10개만
+                # 가상의 주식 데이터 (실제로는 주식 API에서 가져와야 함)
+                stock_data = {
+                    'prices': [100 + i * 0.5 + np.random.normal(0, 1) for i in range(30)]
+                }
+                
+                correlation = self.analyze_trend_correlation(keyword, stock_data)
+                if correlation:
+                    logger.debug(f"상관관계 업데이트: {keyword} - {correlation.correlation_score:.3f}")
+                    
+        except Exception as e:
+            logger.error(f"상관관계 업데이트 실패: {e}")
+
     def get_trend_summary(self) -> Dict:
-        """트렌드 요약 반환"""
+        """트렌드 요약 정보"""
         try:
             summary = {
-                'total_stocks_analyzed': len([k for k in self.trend_data.keys() if k != 'market']),
-                'buy_signals': 0,
-                'sell_signals': 0,
-                'hold_signals': 0,
-                'market_sentiment': None,
-                'top_keywords': [],
-                'last_updated': datetime.now()
+                'total_keywords': len(self.monitoring_keywords),
+                'active_trends': 0,
+                'positive_trends': 0,
+                'negative_trends': 0,
+                'neutral_trends': 0,
+                'top_trending': [],
+                'market_sentiment': 'NEUTRAL',
+                'last_updated': datetime.now().isoformat()
             }
             
-            # 신호 통계
-            for stock_code, data in self.trend_data.items():
-                if stock_code != 'market' and isinstance(data, dict):
-                    recommendation = data.get('recommendation', 'HOLD')
-                    if recommendation == 'BUY':
-                        summary['buy_signals'] += 1
-                    elif recommendation == 'SELL':
-                        summary['sell_signals'] += 1
+            # 최근 트렌드 분석
+            for keyword in self.monitoring_keywords:
+                recent_trends = self.get_historical_trend_data(keyword, days=1)
+                
+                if recent_trends:
+                    latest_trend = recent_trends[0]
+                    summary['active_trends'] += 1
+                    
+                    if latest_trend.sentiment_score > 0.2:
+                        summary['positive_trends'] += 1
+                    elif latest_trend.sentiment_score < -0.2:
+                        summary['negative_trends'] += 1
                     else:
-                        summary['hold_signals'] += 1
+                        summary['neutral_trends'] += 1
             
-            # 시장 감정
-            if 'market' in self.trend_data:
-                summary['market_sentiment'] = self.trend_data['market']
+            # 상위 트렌딩 키워드
+            trending_keywords = self._find_trending_keywords()
+            summary['top_trending'] = trending_keywords[:5]
+            
+            # 전체 시장 감정
+            if summary['positive_trends'] > summary['negative_trends']:
+                summary['market_sentiment'] = 'POSITIVE'
+            elif summary['negative_trends'] > summary['positive_trends']:
+                summary['market_sentiment'] = 'NEGATIVE'
+            else:
+                summary['market_sentiment'] = 'NEUTRAL'
             
             return summary
             
         except Exception as e:
             logger.error(f"트렌드 요약 생성 실패: {e}")
-            return {}
+            return {'error': str(e)}
 
 def main():
-    """테스트용 메인 함수"""
-    # 네이버 API 키 설정
-    client_id = "YOUR_NAVER_CLIENT_ID"
-    client_secret = "YOUR_NAVER_CLIENT_SECRET"
-    
+    """메인 함수"""
     try:
-        # 트렌드 분석기 초기화
+        # 환경 변수에서 API 키 로드
+        client_id = os.getenv('NAVER_CLIENT_ID', 'YOUR_NAVER_CLIENT_ID')
+        client_secret = os.getenv('NAVER_CLIENT_SECRET', 'YOUR_NAVER_CLIENT_SECRET')
+        
+        # 분석기 초기화
         analyzer = NaverTrendAnalyzer(client_id, client_secret)
         
         # 연속 분석 시작
         analyzer.start_continuous_analysis()
         
-        # 10초 대기 후 결과 확인
-        time.sleep(10)
-        
-        # 트렌드 요약 출력
-        summary = analyzer.get_trend_summary()
-        print(f"트렌드 분석 요약: {summary}")
-        
-        # 특정 종목 분석
-        signals = analyzer.get_investment_signals("005930")
-        if signals:
-            print(f"삼성전자 투자 신호: {signals}")
-        
-        # 시장 감정 분석
-        market_sentiment = analyzer.get_market_sentiment()
-        if market_sentiment:
-            print(f"시장 감정: {market_sentiment}")
-        
-        # 30초 대기 후 종료
-        time.sleep(30)
-        analyzer.stop_continuous_analysis()
-        
+        # 무한 루프로 실행
+        try:
+            while True:
+                time.sleep(60)
+        except KeyboardInterrupt:
+            logger.info("프로그램 종료 요청됨")
+        finally:
+            analyzer.stop_continuous_analysis()
+            
     except Exception as e:
-        logger.error(f"트렌드 분석 테스트 실패: {e}")
+        logger.error(f"메인 함수 오류: {e}")
+        handle_error(ErrorType.SYSTEM_ERROR, ErrorLevel.ERROR, f"네이버 트렌드 분석기 오류: {e}")
 
 if __name__ == "__main__":
     main() 
