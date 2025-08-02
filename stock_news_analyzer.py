@@ -27,6 +27,7 @@ class StockAnalysis:
     sentiment_score: float
     keyword_frequency: Dict[str, int]
     recent_news: List[str]
+    recent_news_links: List[str]  # 뉴스 링크 추가
     investment_score: float
     risk_level: str
     recommendation: str
