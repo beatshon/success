@@ -102,9 +102,10 @@ class HybridDashboard:
             # 신호 분포 계산
             signal_counts = data['final_signal'].value_counts().to_dict() if 'final_signal' in data.columns else {}
             
-            # 매수/매도 신호 개수 계산
+            # 매수/매도/관망 신호 개수 계산
             buy_signals = sum(1 for signal in data['final_signal'] if '매수' in signal) if 'final_signal' in data.columns else 0
             sell_signals = sum(1 for signal in data['final_signal'] if '매도' in signal) if 'final_signal' in data.columns else 0
+            hold_signals = sum(1 for signal in data['final_signal'] if '관망' in signal) if 'final_signal' in data.columns else 0
             
             return {
                 "total_stocks": total_stocks,
@@ -112,6 +113,7 @@ class HybridDashboard:
                 "avg_score": round(avg_combined_score, 2),  # 대시보드에서 사용하는 필드명
                 "buy_signals": buy_signals,
                 "sell_signals": sell_signals,
+                "hold_signals": hold_signals,
                 "signal_distribution": signal_counts
             }
         except Exception as e:

@@ -480,8 +480,8 @@
                 }
                 
                 updateSummaryStats(data.summary);
-                updateTopPerformers(data.top_performers);
-                updateRecentActivity(data.recent_activity);
+                updateTopPerformers(data.top_stocks);
+                updateRecentActivity([]); // 최근 활동 데이터는 현재 API에 없음
                 
             } catch (error) {
                 console.error('대시보드 데이터 로드 실패:', error);

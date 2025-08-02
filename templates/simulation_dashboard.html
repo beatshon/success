@@ -508,6 +508,15 @@
 
         // 페이지 로드 시 데이터 로드
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('페이지 로드 완료');
+            console.log('Plotly 객체 확인:', typeof Plotly);
+            
+            if (typeof Plotly === 'undefined') {
+                console.error('Plotly.js가 로드되지 않았습니다!');
+                alert('차트 라이브러리 로드에 실패했습니다. 페이지를 새로고침해주세요.');
+                return;
+            }
+            
             loadDashboardData();
             loadCharts();
             loadTradeDetails();
@@ -635,28 +644,61 @@
             }
         }
 
+        // 차트 타입을 HTML ID로 매핑
+        const chartTypeToId = {
+            'portfolio_value': 'portfolioValueChart',
+            'returns_distribution': 'returnsDistributionChart',
+            'drawdown_analysis': 'drawdownChart',
+            'trade_analysis': 'tradeAnalysisChart',
+            'sector_performance': 'sectorPerformanceChart',
+            'risk_metrics': 'riskMetricsChart'
+        };
+
         // 개별 차트 로드
         async function loadChart(chartType) {
             try {
+                console.log(`${chartType} 차트 로드 시작...`);
                 const response = await fetch(`/api/chart-data/${chartType}`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
+                console.log(`${chartType} 차트 데이터:`, data);
                 
                 if (data.error) {
-                    showError(`${chartType.replace('_', '')}Chart`, data.error);
+                    const chartId = chartTypeToId[chartType];
+                    showError(chartId, data.error);
                     return;
                 }
                 
-                const chartDiv = document.getElementById(`${chartType.replace('_', '')}Chart`);
+                const chartId = chartTypeToId[chartType];
+                const chartDiv = document.getElementById(chartId);
+                if (!chartDiv) {
+                    console.error(`${chartType} 차트 컨테이너를 찾을 수 없습니다. (ID: ${chartId})`);
+                    return;
+                }
+                
                 chartDiv.innerHTML = '';
+                
+                if (!data.data || !data.layout) {
+                    console.error(`${chartType} 차트 데이터 형식이 올바르지 않습니다.`);
+                    showError(chartId, '차트 데이터 형식 오류');
+                    return;
+                }
                 
                 Plotly.newPlot(chartDiv, data.data, data.layout, {
                     responsive: true,
                     displayModeBar: false
                 });
                 
+                console.log(`${chartType} 차트 로드 완료`);
+                
             } catch (error) {
                 console.error(`${chartType} 차트 로드 실패:`, error);
-                showError(`${chartType.replace('_', '')}Chart`, '차트 로드에 실패했습니다.');
+                const chartId = chartTypeToId[chartType];
+                showError(chartId, `차트 로드에 실패했습니다: ${error.message}`);
             }
         }
 
