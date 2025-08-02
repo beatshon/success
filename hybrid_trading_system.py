@@ -15,7 +15,6 @@ from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from loguru import logger
 import yfinance as yf
-import pandas_ta as ta
 
 @dataclass
 class TechnicalSignal:
@@ -72,7 +71,12 @@ class TechnicalAnalyzer:
             return 50.0
         
         try:
-            rsi = data.ta.rsi(length=period)
+            # RSI 계산
+            delta = data['Close'].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
             return float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else 50.0
         except:
             return 50.0
@@ -83,10 +87,12 @@ class TechnicalAnalyzer:
             return 'hold', 0.0
         
         try:
-            macd_data = data.ta.macd()
-            macd = macd_data['MACD_12_26_9']
-            signal = macd_data['MACDs_12_26_9']
-            hist = macd_data['MACDh_12_26_9']
+            # MACD 계산
+            exp1 = data['Close'].ewm(span=12).mean()
+            exp2 = data['Close'].ewm(span=26).mean()
+            macd = exp1 - exp2
+            signal = macd.ewm(span=9).mean()
+            hist = macd - signal
             
             if len(macd) < 2 or len(signal) < 2:
                 return 'hold', 0.0
@@ -108,8 +114,9 @@ class TechnicalAnalyzer:
             return 'below', 0.0
         
         try:
-            ma5 = data.ta.sma(length=5)
-            ma20 = data.ta.sma(length=20)
+            # 이동평균 계산
+            ma5 = data['Close'].rolling(window=5).mean()
+            ma20 = data['Close'].rolling(window=20).mean()
             
             current_price = data['Close'].iloc[-1]
             ma5_current = ma5.iloc[-1]
