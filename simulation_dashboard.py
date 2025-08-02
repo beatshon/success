@@ -100,13 +100,19 @@ class SimulationDashboard:
             for encoding in ['utf-8-sig', 'utf-8', 'cp949']:
                 try:
                     data = pd.read_csv(file_path, encoding=encoding)
+                    
+                    # 날짜 컬럼이 있으면 인덱스로 설정
+                    if 'date' in data.columns:
+                        data['date'] = pd.to_datetime(data['date'])
+                        data.set_index('date', inplace=True)
+                    
                     logger.info(f"시뮬레이션 데이터 로드 완료: {latest_file}")
                     return data
                 except Exception as e:
-                    logger.debug(f"인코딩 {encoding} 실패: {e}")
+                    logger.warning(f"인코딩 {encoding}로 로드 실패: {e}")
                     continue
             
-            logger.error("모든 인코딩으로 파일 읽기 실패")
+            logger.error("모든 인코딩으로 시도했지만 데이터 로드에 실패했습니다.")
             return None
             
         except Exception as e:
