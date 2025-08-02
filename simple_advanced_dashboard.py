@@ -255,11 +255,6 @@ class SimpleAdvancedDashboard:
             },
             'options': {
                 'responsive': True,
-                'interaction': {
-                    'mode': 'nearest',
-                    'axis': 'xy',
-                    'intersect': False
-                },
                 'plugins': {
                     'legend': {
                         'position': 'bottom',
@@ -270,18 +265,8 @@ class SimpleAdvancedDashboard:
                     },
                     'tooltip': {
                         'enabled': True,
-                        'mode': 'nearest',
-                        'intersect': False,
-                        'backgroundColor': 'rgba(0, 0, 0, 0.8)',
-                        'titleColor': '#ffffff',
-                        'bodyColor': '#ffffff',
-                        'borderColor': '#ffffff',
-                        'borderWidth': 1,
-                        'cornerRadius': 6,
-                        'displayColors': True,
                         'callbacks': {
-                            'label': 'function(context) { return context.label + ": " + context.parsed.toFixed(1) + "점"; }',
-                            'title': 'function(context) { return "섹터별 성과"; }'
+                            'label': 'function(context) { return context.label + ": " + context.parsed.toFixed(1) + "점"; }'
                         }
                     }
                 }
