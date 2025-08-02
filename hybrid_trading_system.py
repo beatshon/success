@@ -411,14 +411,14 @@ class HybridTradingSystem:
         # 가중 평균 계산 (뉴스 40%, 기술 60%)
         combined_score = (news_score * 0.4) + (technical_score * 0.6)
         
-        # 최종 신호 결정
-        if combined_score >= 80:
+        # 최종 신호 결정 (임계값 조정)
+        if combined_score >= 70:
             final_signal = "강력매수"
-        elif combined_score >= 60:
+        elif combined_score >= 50:
             final_signal = "매수"
-        elif combined_score <= 20:
+        elif combined_score <= 15:
             final_signal = "강력매도"
-        elif combined_score <= 40:
+        elif combined_score <= 30:
             final_signal = "매도"
         else:
             final_signal = "관망"
