@@ -222,9 +222,43 @@ class HybridDashboard:
             sector_performance = sector_performance.sort_values('mean', ascending=False)
             
             return {
-                "labels": sector_performance['sector'].tolist(),
-                "data": sector_performance['mean'].round(2).tolist(),
-                "counts": sector_performance['count'].tolist()
+                "type": "bar",
+                "data": {
+                    "labels": sector_performance['sector'].tolist(),
+                    "datasets": [{
+                        "label": "평균 점수",
+                        "data": sector_performance['mean'].round(2).tolist(),
+                        "backgroundColor": [
+                            "#28a745", "#17a2b8", "#6f42c1", "#fd7e14", "#e83e8c",
+                            "#20c997", "#ffc107", "#dc3545", "#6c757d", "#343a40"
+                        ],
+                        "borderColor": [
+                            "#1e7e34", "#138496", "#5a32a3", "#e55a00", "#d63384",
+                            "#1ea085", "#e0a800", "#c82333", "#545b62", "#1d2124"
+                        ],
+                        "borderWidth": 1
+                    }]
+                },
+                "options": {
+                    "responsive": True,
+                    "maintainAspectRatio": False,
+                    "plugins": {
+                        "legend": {
+                            "display": False
+                        },
+                        "tooltip": {
+                            "callbacks": {
+                                "label": lambda context: f"평균 점수: {context.parsed.y:.1f}"
+                            }
+                        }
+                    },
+                    "scales": {
+                        "y": {
+                            "beginAtZero": True,
+                            "max": 100
+                        }
+                    }
+                }
             }
         except Exception as e:
             logger.error(f"섹터별 성과 차트 생성 실패: {e}")
@@ -248,9 +282,31 @@ class HybridDashboard:
             }
             
             return {
-                "labels": signal_counts.index.tolist(),
-                "data": signal_counts.values.tolist(),
-                "colors": [signal_colors.get(signal, "#6c757d") for signal in signal_counts.index]
+                "type": "doughnut",
+                "data": {
+                    "labels": signal_counts.index.tolist(),
+                    "datasets": [{
+                        "label": "신호 분포",
+                        "data": signal_counts.values.tolist(),
+                        "backgroundColor": [signal_colors.get(signal, "#6c757d") for signal in signal_counts.index],
+                        "borderColor": "#ffffff",
+                        "borderWidth": 2
+                    }]
+                },
+                "options": {
+                    "responsive": True,
+                    "maintainAspectRatio": False,
+                    "plugins": {
+                        "legend": {
+                            "position": "bottom"
+                        },
+                        "tooltip": {
+                            "callbacks": {
+                                "label": lambda context: f"{context.label}: {context.parsed}개"
+                            }
+                        }
+                    }
+                }
             }
         except Exception as e:
             logger.error(f"신호 분포 차트 생성 실패: {e}")
@@ -266,10 +322,53 @@ class HybridDashboard:
             top_stocks = data.nlargest(10, 'combined_score')
             
             return {
-                "labels": top_stocks['stock_name'].tolist(),
-                "news_scores": top_stocks['news_score'].round(2).tolist(),
-                "technical_scores": top_stocks['technical_score'].round(2).tolist(),
-                "combined_scores": top_stocks['combined_score'].round(2).tolist()
+                "type": "bar",
+                "data": {
+                    "labels": top_stocks['stock_name'].tolist(),
+                    "datasets": [
+                        {
+                            "label": "뉴스 점수",
+                            "data": top_stocks['news_score'].round(2).tolist(),
+                            "backgroundColor": "rgba(54, 162, 235, 0.8)",
+                            "borderColor": "rgba(54, 162, 235, 1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "기술적 점수",
+                            "data": top_stocks['technical_score'].round(2).tolist(),
+                            "backgroundColor": "rgba(255, 99, 132, 0.8)",
+                            "borderColor": "rgba(255, 99, 132, 1)",
+                            "borderWidth": 1
+                        },
+                        {
+                            "label": "종합 점수",
+                            "data": top_stocks['combined_score'].round(2).tolist(),
+                            "backgroundColor": "rgba(75, 192, 192, 0.8)",
+                            "borderColor": "rgba(75, 192, 192, 1)",
+                            "borderWidth": 1
+                        }
+                    ]
+                },
+                "options": {
+                    "responsive": True,
+                    "maintainAspectRatio": False,
+                    "plugins": {
+                        "legend": {
+                            "position": "top"
+                        },
+                        "tooltip": {
+                            "callbacks": {
+                                "label": lambda context: f"{context.dataset.label}: {context.parsed.y:.1f}"
+                            }
+                        }
+                    },
+                    "scales": {
+                        "y": {
+                            "beginAtZero": True,
+                            "max": 100
+                        }
+                    }
+                }
             }
         except Exception as e:
             logger.error(f"뉴스 vs 기술적 분석 차트 생성 실패: {e}")
