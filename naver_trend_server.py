@@ -26,27 +26,24 @@ class NaverTrendServer:
     """네이버 트렌드 분석 서버"""
     
     def __init__(self, port: int = 8085, client_id: str = None, client_secret: str = None):
+        """초기화"""
         self.port = port
-        self.app = Flask(__name__)
-        CORS(self.app)
-        
-        # 네이버 API 설정
-        self.client_id = client_id or "YOUR_NAVER_CLIENT_ID"
-        self.client_secret = client_secret or "YOUR_NAVER_CLIENT_SECRET"
-        
-        # 트렌드 분석기
         self.analyzer = None
         
-        # 실시간 데이터 수집 상태
-        self.data_collection_running = False
-        self.collection_thread = None
+        # 새로운 Flask 앱 생성
+        self.app = Flask(__name__, 
+                        template_folder='templates',
+                        static_folder='static')
+        
+        # CORS 설정
+        CORS(self.app)
+        
+        # 라우트 설정
+        self._setup_routes()
         
         # 시그널 핸들러 설정
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
-        
-        # 라우트 설정
-        self._setup_routes()
         
     def _signal_handler(self, signum, frame):
         """시그널 핸들러"""
