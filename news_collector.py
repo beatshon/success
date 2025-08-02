@@ -45,6 +45,114 @@ class NewsItem:
     sentiment: float = 0.0  # 감정 점수 (-1.0 ~ 1.0)
     related_stocks: List[str] = None  # 관련 종목 코드 리스트
 
+class AIMatchingEngine:
+    """AI 기반 종목 매칭 엔진"""
+    
+    def __init__(self):
+        self.vectorizer = TfidfVectorizer(
+            max_features=1000,
+            stop_words='english',
+            ngram_range=(1, 2),
+            min_df=1,
+            max_df=0.9
+        )
+        self.stock_vectors = None
+        self.stock_names = []
+        self.stock_codes = []
+        self._initialize_stopwords()
+    
+    def _initialize_stopwords(self):
+        """한국어 불용어 초기화"""
+        self.korean_stopwords = set([
+            '이', '그', '저', '것', '수', '등', '및', '또는', '그리고', '하지만', '그러나',
+            '때', '곳', '사람', '일', '년', '월', '일', '시', '분', '초', '주', '개',
+            '회', '번', '차', '대', '명', '개', '마리', '권', '장', '벌', '채', '줄',
+            '그루', '송이', '포기', '마디', '상자', '사발', '잔', '컵', '통', '캔',
+            '병', '박스', '봉지', '묶음', '세트', '켤레', '쌍', '벌', '자루', '개비',
+            '알', '톨', '톨레', '톨트', '톨트', '톨트', '톨트', '톨트', '톨트', '톨트'
+        ])
+    
+    def preprocess_text(self, text: str) -> str:
+        """텍스트 전처리"""
+        # 특수문자 제거
+        text = re.sub(r'[^\w\s]', ' ', text)
+        # 숫자 제거
+        text = re.sub(r'\d+', '', text)
+        # 공백 정리
+        text = re.sub(r'\s+', ' ', text).strip()
+        return text
+    
+    def tokenize_korean(self, text: str) -> List[str]:
+        """한국어 토큰화"""
+        # jieba로 한국어 토큰화
+        tokens = jieba.lcut(text)
+        # 불용어 제거
+        tokens = [token for token in tokens if token not in self.korean_stopwords and len(token) > 1]
+        return tokens
+    
+    def build_stock_corpus(self, stock_keywords: Dict[str, List[str]]):
+        """종목별 코퍼스 구축"""
+        self.stock_names = []
+        self.stock_codes = []
+        corpus = []
+        
+        for stock_code, keywords in stock_keywords.items():
+            # 종목명과 키워드를 결합하여 문서 생성
+            stock_name = keywords[0] if keywords else ""
+            combined_text = f"{stock_name} {' '.join(keywords)}"
+            
+            # 전처리 및 토큰화
+            processed_text = self.preprocess_text(combined_text)
+            tokens = self.tokenize_korean(processed_text)
+            document = ' '.join(tokens)
+            
+            corpus.append(document)
+            self.stock_names.append(stock_name)
+            self.stock_codes.append(stock_code)
+        
+        # TF-IDF 벡터화
+        self.stock_vectors = self.vectorizer.fit_transform(corpus)
+        logger.info(f"종목 코퍼스 구축 완료: {len(self.stock_codes)}개 종목")
+    
+    def calculate_similarity(self, news_text: str) -> List[tuple]:
+        """뉴스 텍스트와 종목 간 유사도 계산"""
+        if self.stock_vectors is None:
+            return []
+        
+        # 뉴스 텍스트 전처리
+        processed_text = self.preprocess_text(news_text)
+        tokens = self.tokenize_korean(processed_text)
+        news_document = ' '.join(tokens)
+        
+        # 뉴스 텍스트 벡터화
+        news_vector = self.vectorizer.transform([news_document])
+        
+        # 코사인 유사도 계산
+        similarities = cosine_similarity(news_vector, self.stock_vectors).flatten()
+        
+        # 종목 코드와 유사도 점수를 튜플로 반환
+        results = [(self.stock_codes[i], similarities[i], self.stock_names[i]) 
+                  for i in range(len(similarities))]
+        
+        # 유사도 순으로 정렬
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results
+    
+    def find_related_stocks_ai(self, news_text: str, threshold: float = 0.1) -> List[str]:
+        """AI 기반 관련 종목 찾기"""
+        similarities = self.calculate_similarity(news_text)
+        
+        # 임계값 이상의 종목만 선택
+        related_stocks = []
+        for stock_code, similarity, stock_name in similarities:
+            if similarity >= threshold:
+                related_stocks.append(stock_code)
+                logger.debug(f"AI 매칭: {stock_name}({stock_code}) - 유사도: {similarity:.3f}")
+        
+        # 상위 3개 종목만 반환
+        return related_stocks[:3]
+
+
 class NaverNewsCollector:
     """네이버 뉴스 수집기"""
     
@@ -66,6 +174,10 @@ class NaverNewsCollector:
         
         # 종목명 매칭을 위한 데이터
         self.stock_keywords = self._load_stock_keywords()
+        
+        # AI 매칭 엔진 초기화
+        self.ai_engine = AIMatchingEngine()
+        self.ai_engine.build_stock_corpus(self.stock_keywords)
         
         logger.info("네이버 뉴스 수집기 초기화 완료")
     
@@ -214,7 +326,42 @@ class NaverNewsCollector:
         return keywords
     
     def _find_related_stocks(self, text: str) -> List[str]:
-        """텍스트에서 관련 종목 코드 찾기 - 가중치 기반 개선된 매칭"""
+        """텍스트에서 관련 종목 코드 찾기 - AI 기반 하이브리드 매칭"""
+        # 1. AI 기반 매칭 (의미적 유사도)
+        ai_matches = self.ai_engine.find_related_stocks_ai(text, threshold=0.15)
+        
+        # 2. 기존 키워드 기반 매칭 (백업)
+        keyword_matches = self._find_related_stocks_keyword(text)
+        
+        # 3. 하이브리드 결과 결합
+        combined_matches = {}
+        
+        # AI 매칭 결과에 높은 가중치 부여
+        for stock_code in ai_matches:
+            combined_matches[stock_code] = combined_matches.get(stock_code, 0) + 10
+        
+        # 키워드 매칭 결과에 기본 가중치 부여
+        for stock_code in keyword_matches:
+            combined_matches[stock_code] = combined_matches.get(stock_code, 0) + 5
+        
+        # 점수 순으로 정렬
+        sorted_matches = sorted(combined_matches.items(), key=lambda x: x[1], reverse=True)
+        
+        # 상위 3개 종목 반환
+        result = [stock_code for stock_code, score in sorted_matches[:3]]
+        
+        # 디버그 로깅
+        if result:
+            logger.debug(f"하이브리드 매칭 결과: {result}")
+            for stock_code in result:
+                stock_name = next((keywords[0] for code, keywords in self.stock_keywords.items() 
+                                 if code == stock_code), "Unknown")
+                logger.debug(f"  - {stock_name}({stock_code})")
+        
+        return result
+    
+    def _find_related_stocks_keyword(self, text: str) -> List[str]:
+        """기존 키워드 기반 매칭 (백업용)"""
         text_lower = text.lower()
         stock_scores = {}
         
@@ -251,7 +398,6 @@ class NaverNewsCollector:
         result = []
         for stock_code, info in sorted_stocks[:3]:
             result.append(stock_code)
-            logger.debug(f"종목 {stock_code} 매칭 점수: {info['score']}, 키워드: {info['keywords']}")
         
         return result
     
