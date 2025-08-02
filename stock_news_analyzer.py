@@ -162,6 +162,7 @@ class StockNewsAnalyzer:
             # 키워드 빈도 분석
             keyword_freq = Counter()
             recent_titles = []
+            recent_links = []
             
             for news in news_list:
                 # 감정 분석
@@ -182,9 +183,10 @@ class StockNewsAnalyzer:
                 for keyword in news.keywords:
                     keyword_freq[keyword] += 1
                 
-                # 최근 뉴스 제목 (최대 5개)
+                # 최근 뉴스 제목과 링크 (최대 5개)
                 if len(recent_titles) < 5:
                     recent_titles.append(news.title)
+                    recent_links.append(news.link)
             
             # 평균 감정 점수
             avg_sentiment = total_sentiment / len(news_list) if news_list else 0.0
@@ -211,6 +213,7 @@ class StockNewsAnalyzer:
                 sentiment_score=avg_sentiment,
                 keyword_frequency=dict(keyword_freq),
                 recent_news=recent_titles,
+                recent_news_links=recent_links,
                 investment_score=investment_score,
                 risk_level=risk_level,
                 recommendation=recommendation
@@ -390,6 +393,9 @@ class StockNewsAnalyzer:
         
         data = []
         for analysis in stock_analysis.values():
+            # 뉴스 링크를 문자열로 변환 (최대 3개)
+            recent_links_str = " | ".join(analysis.recent_news_links[:3]) if analysis.recent_news_links else ""
+            
             data.append({
                 "stock_code": analysis.stock_code,
                 "stock_name": analysis.stock_name,
@@ -402,7 +408,8 @@ class StockNewsAnalyzer:
                 "risk_level": analysis.risk_level,
                 "recommendation": analysis.recommendation,
                 "top_keywords": ", ".join([k for k, v in sorted(analysis.keyword_frequency.items(), 
-                                                              key=lambda x: x[1], reverse=True)[:5]])
+                                                              key=lambda x: x[1], reverse=True)[:5]]),
+                "recent_news_links": recent_links_str
             })
         
         df = pd.DataFrame(data)
