@@ -204,10 +204,15 @@ class SimpleAdvancedDashboard:
         if df.empty:
             return {}
         
+        # 디버깅을 위한 로그 추가
+        logger.info(f"섹터별 성과 차트 생성 시작: {len(df)}개 종목")
+        
         # 간단한 섹터 분류
         sector_scores = {}
         for _, row in df.iterrows():
-            sector = self._get_stock_sector(row['stock_code'])
+            stock_code = str(row['stock_code']).zfill(6)  # 6자리로 맞춤
+            sector = self._get_stock_sector(stock_code)
+            logger.info(f"종목 {stock_code} -> 섹터: {sector}")
             if sector not in sector_scores:
                 sector_scores[sector] = []
             sector_scores[sector].append(row['investment_score'])
@@ -216,23 +221,51 @@ class SimpleAdvancedDashboard:
         for sector, scores in sector_scores.items():
             sector_analysis[sector] = np.mean(scores)
         
+        logger.info(f"섹터별 분석 결과: {sector_analysis}")
+        
+        # 섹터별 색상 매핑
+        sector_colors = {
+            '반도체': '#FF6384',    # 빨강
+            'IT': '#36A2EB',        # 파랑
+            '화학': '#FFCE56',      # 노랑
+            '자동차': '#4BC0C0',    # 청록
+            '철강': '#9966FF',      # 보라
+            '바이오': '#FF9F40',    # 주황
+            '통신': '#FF6384',      # 빨강
+            '서비스': '#C9CBCF',    # 회색
+            '금융': '#4BC0C0',      # 청록
+            '에너지': '#FFCE56',    # 노랑
+            '기타': '#E7E7E7'       # 연회색
+        }
+        
+        # 섹터별 색상 적용
+        colors = [sector_colors.get(sector, '#E7E7E7') for sector in sector_analysis.keys()]
+        
         return {
             'type': 'doughnut',
             'data': {
                 'labels': list(sector_analysis.keys()),
                 'datasets': [{
                     'data': list(sector_analysis.values()),
-                    'backgroundColor': [
-                        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
-                        '#9966FF', '#FF9F40'
-                    ][:len(sector_analysis)]
+                    'backgroundColor': colors,
+                    'borderWidth': 2,
+                    'borderColor': '#ffffff'
                 }]
             },
             'options': {
                 'responsive': True,
                 'plugins': {
                     'legend': {
-                        'position': 'bottom'
+                        'position': 'bottom',
+                        'labels': {
+                            'padding': 20,
+                            'usePointStyle': True
+                        }
+                    },
+                    'tooltip': {
+                        'callbacks': {
+                            'label': 'function(context) { return context.label + ": " + context.parsed.toFixed(1) + "점"; }'
+                        }
                     }
                 }
             }
