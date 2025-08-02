@@ -18,7 +18,11 @@ class HybridDashboard:
     def setup_routes(self):
         @self.app.route('/')
         def index():
-            return render_template('hybrid_dashboard.html')
+            response = render_template('hybrid_dashboard.html')
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            response.headers['Pragma'] = 'no-cache'
+            response.headers['Expires'] = '0'
+            return response
         
         @self.app.route('/api/dashboard-data')
         def get_dashboard_data():
