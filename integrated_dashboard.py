@@ -4,7 +4,7 @@
 import os
 import json
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import Flask, render_template, jsonify, redirect, url_for
 from loguru import logger
 
@@ -54,6 +54,42 @@ class IntegratedDashboard:
                 return jsonify(activity)
             except Exception as e:
                 logger.error(f"최근 활동 조회 실패: {e}")
+                return jsonify({"error": str(e)})
+        
+        @self.app.route('/api/chart-data/performance-trend')
+        def get_performance_trend():
+            try:
+                trend_data = self._get_performance_trend()
+                return jsonify(trend_data)
+            except Exception as e:
+                logger.error(f"성과 트렌드 차트 데이터 조회 실패: {e}")
+                return jsonify({"error": str(e)})
+        
+        @self.app.route('/api/chart-data/signal-distribution')
+        def get_signal_distribution():
+            try:
+                signal_data = self._get_signal_distribution()
+                return jsonify(signal_data)
+            except Exception as e:
+                logger.error(f"신호 분포 차트 데이터 조회 실패: {e}")
+                return jsonify({"error": str(e)})
+        
+        @self.app.route('/api/chart-data/portfolio-growth')
+        def get_portfolio_growth():
+            try:
+                growth_data = self._get_portfolio_growth()
+                return jsonify(growth_data)
+            except Exception as e:
+                logger.error(f"포트폴리오 성장 차트 데이터 조회 실패: {e}")
+                return jsonify({"error": str(e)})
+        
+        @self.app.route('/api/system-status')
+        def get_system_status():
+            try:
+                status = self._get_system_status()
+                return jsonify(status)
+            except Exception as e:
+                logger.error(f"시스템 상태 조회 실패: {e}")
                 return jsonify({"error": str(e)})
     
     def _get_latest_hybrid_data(self):
