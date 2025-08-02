@@ -179,7 +179,7 @@ class SimpleAdvancedDashboard:
             'data': {
                 'labels': top_stocks['stock_name'].tolist(),
                 'datasets': [{
-                    'label': '투자점수',
+                    'label': '📊 투자 점수',
                     'data': top_stocks['investment_score'].tolist(),
                     'backgroundColor': [
                         '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0',
