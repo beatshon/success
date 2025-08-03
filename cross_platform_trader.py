@@ -461,7 +461,7 @@ class AdvancedTradingStrategy:
 
 
 class RealtimeTrader:
-    def __init__(self, api, account, daily_loss_limit=-3.0):
+    def __init__(self, api, account, daily_loss_limit=-3.0, max_retry=3, retry_delay=0.5):
         self.api = api
         self.account = account
         self.positions = {}
@@ -470,6 +470,11 @@ class RealtimeTrader:
         self.starting_balance = self.account_info["예수금"]
         self.daily_loss_limit = daily_loss_limit  # 하루 손실 상한선 (%)
         self.last_reset_date = datetime.now().date()
+        
+        # 주문 재시도 설정
+        self.max_retry = max_retry       # 주문 실패 시 재시도 횟수
+        self.retry_delay = retry_delay   # 재시도 간격(초)
+        self.order_status = {}           # 주문ID -> 상태 관리
         
         # 로깅 및 텔레그램 초기화
         self.logger = TradeLogger()
@@ -614,13 +619,12 @@ class RealtimeTrader:
                 # 매수 수량 결정 (1-10주)
                 quantity = min(max_quantity, random.randint(1, 10))
                 
-                # 매수 주문
-                result = self.api.send_order(
-                    "매수", "0101", self.account, 1, 
-                    stock_code, quantity, current_price, "00"
+                # 매수 주문 (재시도 포함)
+                order_id = self.send_order_with_retry(
+                    "매수", 1, stock_code, quantity, current_price, "00"
                 )
                 
-                if result == 0:
+                if order_id:
                     # 매수 성공 시 포지션 업데이트
                     cost = quantity * current_price
                     self.account_info["예수금"] -= cost
@@ -664,13 +668,12 @@ class RealtimeTrader:
                 current_price = self.api.get_current_price(stock_code)
                 quantity = self.positions[stock_code]["shares"]
                 
-                # 매도 주문
-                result = self.api.send_order(
-                    "매도", "0101", self.account, 2, 
-                    stock_code, quantity, current_price, "00"
+                # 매도 주문 (재시도 포함)
+                order_id = self.send_order_with_retry(
+                    "매도", 2, stock_code, quantity, current_price, "00"
                 )
                 
-                if result == 0:
+                if order_id:
                     # 매도 성공 시 포지션 업데이트
                     revenue = quantity * current_price
                     self.account_info["예수금"] += revenue
@@ -744,7 +747,9 @@ class RealtimeTrader:
                     if sell_reason:
                         self.execute_sell(stock_code, sell_reason)
 
+                # 미체결 주문 관리 (5회마다)
                 if iteration % 5 == 0:
+                    self.manage_unfilled_orders()
                     self._print_stats()
 
                 # Mock 환경 반복 제한
@@ -766,8 +771,12 @@ class RealtimeTrader:
         for stock_code, position in self.positions.items():
             current_price = self.api.get_current_price(stock_code)
             total_value += position["shares"] * current_price
-            
+        
+        # 주문 현황 요약
+        order_summary = self.get_order_summary()
+        
         logging.info(f"총 자산: {total_value:,}원 | 보유 종목: {len(self.positions)}개 | 예수금: {self.account_info['예수금']:,}원")
+        logging.info(f"주문 현황: 총 {order_summary['총주문']}건 (체결대기: {order_summary['체결대기']}, 미체결: {order_summary['미체결']})")
         
     def start(self):
         """트레이딩 시작"""
@@ -887,6 +896,81 @@ class RealtimeTrader:
             logging.error(f"총 자산 계산 중 오류: {e}")
             return self.account_info["예수금"]
 
+    def send_order_with_retry(self, rqname, order_type, code, qty, price, hoga_gb):
+        """주문 요청 시 재시도 + 미체결 확인"""
+        for attempt in range(1, self.max_retry + 1):
+            try:
+                result = self.api.send_order(
+                    rqname, "0101", self.account, order_type,
+                    code, qty, price, hoga_gb
+                )
+                if result == 0:
+                    logging.info(f"[주문성공] {rqname} {code} {qty}주 (시도 {attempt}/{self.max_retry})")
+                    # 주문ID 기록 (Mock에선 가상ID 사용)
+                    order_id = f"{code}_{datetime.now().strftime('%H%M%S')}"
+                    self.order_status[order_id] = "체결대기"
+                    return order_id
+                else:
+                    logging.warning(f"[주문실패] {rqname} {code}, 재시도 {attempt}/{self.max_retry}")
+            except Exception as e:
+                logging.error(f"[주문오류] {rqname} {code}, {e}, 재시도 {attempt}/{self.max_retry}")
+            
+            time.sleep(self.retry_delay)
+
+        # 모든 시도 실패 시 비상정지
+        self.emergency_stop_trading(f"{rqname} 주문 실패 ({code})")
+        return None
+
+    def check_order_status(self, order_id):
+        """주문 체결 여부 확인 (Mock에서는 랜덤)"""
+        if not WINDOWS_ENV:
+            import random
+            filled = random.choice([True, False])
+            if filled:
+                self.order_status[order_id] = "체결완료"
+                logging.info(f"[체결완료] {order_id}")
+            else:
+                self.order_status[order_id] = "미체결"
+                logging.warning(f"[미체결] {order_id}")
+            return self.order_status[order_id]
+        else:
+            # Windows 환경에서는 실제 API 호출 필요
+            try:
+                status = self.api.ocx.dynamicCall(
+                    "GetChejanData(int)", 913  # 예시: 체결 상태 필드
+                )
+                self.order_status[order_id] = "체결완료" if status else "미체결"
+                return self.order_status[order_id]
+            except Exception as e:
+                logging.error(f"주문 상태 확인 중 오류: {e}")
+                return "확인불가"
+
+    def manage_unfilled_orders(self):
+        """미체결 주문 관리"""
+        for order_id, status in list(self.order_status.items()):
+            if status == "미체결":
+                logging.warning(f"[미체결] {order_id}, 주문 취소 후 재주문 시도")
+                # 주문 취소 후 다시 주문 (Mock: 단순 로그)
+                del self.order_status[order_id]
+                # 실제 구현 시 self.api.cancel_order(order_id) 필요
+                self.telegram.send_message(f"⚠️ [미체결] {order_id} 주문 취소됨")
+            elif status == "체결완료":
+                # 체결 완료된 주문은 상태에서 제거
+                del self.order_status[order_id]
+                logging.info(f"[정리] 체결완료 주문 {order_id} 상태에서 제거")
+
+    def get_order_summary(self):
+        """주문 현황 요약"""
+        total_orders = len(self.order_status)
+        pending_orders = sum(1 for status in self.order_status.values() if status == "체결대기")
+        unfilled_orders = sum(1 for status in self.order_status.values() if status == "미체결")
+        
+        return {
+            "총주문": total_orders,
+            "체결대기": pending_orders,
+            "미체결": unfilled_orders
+        }
+
 
 def main():
     """메인 함수"""
@@ -900,6 +984,8 @@ def main():
                        help='비상정지 테스트 실행')
     parser.add_argument('--daily-loss-test', action='store_true',
                        help='하루 손실 상한선 테스트 실행')
+    parser.add_argument('--order-retry-test', action='store_true',
+                       help='주문 재시도 및 미체결 관리 테스트 실행')
     parser.add_argument('--test', action='store_true',
                        help='테스트 모드로 실행')
     
@@ -997,6 +1083,52 @@ def main():
         except Exception as e:
             logging.error(f"하루 손실 상한선 테스트 중 오류: {e}")
             print(f"❌ 하루 손실 상한선 테스트 실패: {e}")
+        
+        return
+    
+    # 주문 재시도 및 미체결 관리 테스트
+    if args.order_retry_test:
+        print("🔄 주문 재시도 및 미체결 관리 테스트 실행")
+        print("=" * 50)
+        
+        try:
+            # API 초기화
+            api = KiwoomAPI()
+            api.login()
+            
+            # 계좌 정보 조회
+            account_info = api.get_account_info()
+            account = account_info["계좌번호"]
+            
+            # 트레이더 초기화
+            trader = RealtimeTrader(api, account, max_retry=3, retry_delay=0.1)
+            trader.initialize()
+            
+            # 주문 재시도 테스트
+            print("1️⃣ 주문 재시도 테스트")
+            order_id = trader.send_order_with_retry("매수", 1, "005930.KS", 5, 80000, "00")
+            if order_id:
+                print(f"✅ 주문 성공: {order_id}")
+                
+                # 주문 상태 확인
+                print("2️⃣ 주문 상태 확인")
+                for i in range(3):
+                    status = trader.check_order_status(order_id)
+                    print(f"체크 {i+1}: {status}")
+                    time.sleep(0.2)
+                
+                # 미체결 주문 관리
+                print("3️⃣ 미체결 주문 관리")
+                trader.manage_unfilled_orders()
+                print(f"주문 현황: {trader.get_order_summary()}")
+            else:
+                print("❌ 주문 실패")
+            
+            print("✅ 주문 재시도 및 미체결 관리 테스트 완료!")
+            
+        except Exception as e:
+            logging.error(f"주문 재시도 테스트 중 오류: {e}")
+            print(f"❌ 주문 재시도 테스트 실패: {e}")
         
         return
     

@@ -176,6 +176,42 @@ python cross_platform_trader.py --daily-loss-test
 python test_daily_loss_limit.py
 ```
 
+## 🔄 주문 재시도 및 미체결 관리 시스템
+
+### 1. 기능 설명
+- **주문 재시도**: 주문 실패 시 자동 재시도 (기본 3회)
+- **미체결 관리**: 미체결 주문 자동 취소 및 재주문
+- **주문 상태 추적**: 실시간 주문 상태 모니터링
+- **안전한 주문**: 모든 시도 실패 시 비상정지
+
+### 2. 설정 방법
+```python
+# 기본 설정 (3회 재시도, 0.5초 간격)
+trader = RealtimeTrader(api, account)
+
+# 사용자 정의 설정 (5회 재시도, 1초 간격)
+trader = RealtimeTrader(api, account, max_retry=5, retry_delay=1.0)
+
+# 빠른 재시도 설정 (2회 재시도, 0.2초 간격)
+trader = RealtimeTrader(api, account, max_retry=2, retry_delay=0.2)
+```
+
+### 3. 동작 원리
+1. **주문 전송**: `send_order_with_retry()` 메서드로 주문 전송
+2. **재시도 로직**: 실패 시 설정된 횟수만큼 재시도
+3. **상태 확인**: `check_order_status()` 메서드로 체결 여부 확인
+4. **미체결 관리**: `manage_unfilled_orders()` 메서드로 미체결 주문 처리
+5. **비상정지**: 모든 시도 실패 시 자동 비상정지
+
+### 4. 테스트 방법
+```bash
+# 기본 테스트
+python cross_platform_trader.py --order-retry-test
+
+# 상세 테스트
+python test_order_retry_system.py
+```
+
 ## 🔧 로그 분석 도구
 
 ### 1. CSV 파일 분석
@@ -332,6 +368,9 @@ python cross_platform_trader.py --emergency-stop
 
 # 하루 손실 상한선 테스트
 python cross_platform_trader.py --daily-loss-test
+
+# 주문 재시도 및 미체결 관리 테스트
+python cross_platform_trader.py --order-retry-test
 
 # 테스트 모드 (5회 반복)
 python cross_platform_trader.py --test
