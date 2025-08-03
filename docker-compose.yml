@@ -1,0 +1,149 @@
+version: '3.8'
+
+services:
+  # 메인 트레이딩 애플리케이션
+  trading-app:
+    build: .
+    container_name: trading-app
+    ports:
+      - "8000:8000"
+      - "8080:8080"
+    volumes:
+      - ./models:/app/models
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./config:/app/config
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://trading_user:trading_pass@postgres:5432/trading_db
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+    networks:
+      - trading-network
+
+  # PostgreSQL 데이터베이스
+  postgres:
+    image: postgres:13
+    container_name: trading-postgres
+    environment:
+      - POSTGRES_DB=trading_db
+      - POSTGRES_USER=trading_user
+      - POSTGRES_PASSWORD=trading_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    networks:
+      - trading-network
+
+  # Redis 캐시
+  redis:
+    image: redis:6-alpine
+    container_name: trading-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - trading-network
+
+  # 웹 대시보드
+  dashboard:
+    build: .
+    container_name: trading-dashboard
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./templates:/app/templates
+      - ./static:/app/static
+    environment:
+      - FLASK_ENV=production
+      - TRADING_APP_URL=http://trading-app:8000
+    depends_on:
+      - trading-app
+    restart: unless-stopped
+    networks:
+      - trading-network
+    command: ["python", "simple_dashboard.py"]
+
+  # 모니터링 시스템
+  monitoring:
+    build: .
+    container_name: trading-monitoring
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - MONITORING_PORT=9090
+    depends_on:
+      - trading-app
+    restart: unless-stopped
+    networks:
+      - trading-network
+    command: ["python", "system_monitor.py"]
+
+  # 데이터 수집기
+  data-collector:
+    build: .
+    container_name: trading-data-collector
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - DATA_COLLECTION_INTERVAL=60
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - trading-network
+    command: ["python", "real_time_data_collector.py"]
+
+  # 뉴스 분석기
+  news-analyzer:
+    build: .
+    container_name: trading-news-analyzer
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NEWS_ANALYSIS_INTERVAL=300
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    restart: unless-stopped
+    networks:
+      - trading-network
+    command: ["python", "stock_news_analyzer.py"]
+
+  # Nginx 리버스 프록시
+  nginx:
+    image: nginx:alpine
+    container_name: trading-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - trading-app
+      - dashboard
+    restart: unless-stopped
+    networks:
+      - trading-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  trading-network:
+    driver: bridge 

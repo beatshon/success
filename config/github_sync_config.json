@@ -1,0 +1,35 @@
+{
+  "repo_url": "https://github.com/your-username/kiwoom_trading.git",
+  "branch": "main",
+  "auto_sync": true,
+  "sync_interval": 300,
+  "backup_enabled": true,
+  "file_patterns": [
+    "*.py",
+    "*.bat",
+    "*.sh",
+    "*.md",
+    "*.txt",
+    "*.json",
+    "config/*",
+    "templates/*"
+  ],
+  "exclude_patterns": [
+    "*.log",
+    "logs/*",
+    "venv/*",
+    "__pycache__/*",
+    "*.pyc",
+    ".git/*",
+    "backup_*/*"
+  ],
+  "git_config": {
+    "user_name": "Kiwoom Trading Bot",
+    "user_email": "trading@example.com"
+  },
+  "sync_options": {
+    "create_backup_branch": true,
+    "force_push": false,
+    "merge_strategy": "rebase"
+  }
+} 
