@@ -658,7 +658,7 @@
         async function loadChart(chartType) {
             try {
                 console.log(`${chartType} 차트 로드 시작...`);
-                const response = await fetch(`/api/chart-data/${chartType}`);
+트                const response = await fetch(`/api/chart-data/${chartType}`);
                 
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);

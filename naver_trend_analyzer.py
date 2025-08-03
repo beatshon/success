@@ -95,9 +95,9 @@ class NaverTrendAnalyzer:
             }
             
             # 데이터 저장소 초기화
-        self.trend_data = {}
+            self.trend_data = {}
             self.news_data = {}
-        self.correlation_data = {}
+            self.correlation_data = {}
         
             # 분석 상태
             self.analysis_running = False
@@ -741,7 +741,7 @@ class NaverTrendAnalyzer:
             
         except Exception as e:
             logger.error(f"비동기 검색 트렌드 수집 실패 ({keyword}): {e}")
-                return None
+            return None
             
     async def _collect_news_sentiment_async(self, session: aiohttp.ClientSession, keyword: str):
         """비동기 뉴스 감정 분석 수집"""
@@ -1003,7 +1003,7 @@ class NaverTrendAnalyzer:
                 overall_signal = 'BUY'
             elif overall_signal_score < -0.2:
                 overall_signal = 'SELL'
-                    else:
+            else:
                 overall_signal = 'HOLD'
             
             # 신뢰도 계산
@@ -1750,7 +1750,7 @@ def main():
         except KeyboardInterrupt:
             logger.info("프로그램 종료 요청됨")
         finally:
-        analyzer.stop_continuous_analysis()
+            analyzer.stop_continuous_analysis()
         
     except Exception as e:
         logger.error(f"메인 함수 오류: {e}")
