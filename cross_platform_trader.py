@@ -461,27 +461,38 @@ class AdvancedTradingStrategy:
 
 
 class RealtimeTrader:
-    def __init__(self, api: KiwoomAPI, account: str):
+    def __init__(self, api, account, daily_loss_limit=-3.0):
         self.api = api
         self.account = account
-        self.positions = {}  # 보유 종목
-        self.account_info = {"예수금": 10000000}  # 초기 자금 1000만원
+        self.positions = {}
+        self.account_info = {"예수금": 10000000}  # 초기 자금 예시: 1천만 원
         self.running = False
-        self.strategy = AdvancedTradingStrategy()
+        self.starting_balance = self.account_info["예수금"]
+        self.daily_loss_limit = daily_loss_limit  # 하루 손실 상한선 (%)
+        self.last_reset_date = datetime.now().date()
         
-        # 로깅 및 알림 시스템 초기화
+        # 로깅 및 텔레그램 초기화
         self.logger = TradeLogger()
         self.telegram = TelegramNotifier(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
-        
-        # 비상정지 플래그
         self.emergency_stop = False
+        
+        # 시스템 시작 알림
+        self.telegram.send_message(f"🚀 [시스템시작] 크로스 플랫폼 트레이딩 시스템\n"
+                                 f"환경: {'Windows' if WINDOWS_ENV else 'Mac'}\n"
+                                 f"계좌: {account}\n"
+                                 f"초기자금: {self.account_info['예수금']:,}원")
         
     def initialize(self):
         """초기화"""
         account_info = self.api.get_account_info()
+        
+        # 전략 초기화
+        self.strategy = AdvancedTradingStrategy()
+        
         logging.info(f"계좌 정보: {account_info}")
         logging.info(f"계좌 잔고: {self.account_info['예수금']:,}원")
         logging.info(f"보유 종목: {len(self.positions)}개")
+        logging.info(f"하루 손실 상한선: {self.daily_loss_limit}%")
         
         # 텔레그램 테스트 메시지 전송
         if self.telegram.enabled:
@@ -692,10 +703,21 @@ class RealtimeTrader:
     def trading_loop(self, max_iterations=20):
         """트레이딩 루프"""
         iteration = 0
+        self.starting_balance = self.get_total_balance()
+        logging.info(f"🚀 트레이딩 시작 (기준 잔고: {self.starting_balance:,}원, 손실 한도: {self.daily_loss_limit}%)")
+        
         while self.running and not self.emergency_stop:
             iteration += 1
 
             try:
+                # 자정 넘어가면 손실 상한선 리셋
+                self.reset_daily_limit()
+                
+                # 하루 손실 상한선 체크
+                if self.check_daily_loss_limit():
+                    logging.error("🚨 하루 손실 상한선 초과로 트레이딩 중지")
+                    break
+
                 # 매수 신호 확인 (고급 전략 사용)
                 for stock_code in ["005930.KS", "000660.KS", "035420.KS"]:
                     if self.emergency_stop:
@@ -823,6 +845,48 @@ class RealtimeTrader:
             except:
                 logging.error("간단한 일일 요약 전송도 실패")
 
+    def check_daily_loss_limit(self):
+        """하루 손실률 체크"""
+        try:
+            total_value = self.account_info["예수금"]
+            for code, pos in self.positions.items():
+                current_price = self.api.get_current_price(code)
+                total_value += pos["shares"] * current_price
+
+            current_return = ((total_value - self.starting_balance) / self.starting_balance) * 100
+
+            if current_return <= self.daily_loss_limit:
+                logging.warning(f"🚨 하루 손실률 {current_return:.2f}% 초과 (한도 {self.daily_loss_limit}%)")
+                self.emergency_stop_trading(f"하루 손실률 {current_return:.2f}% 초과 (한도 {self.daily_loss_limit}%)")
+                return True
+            return False
+        except Exception as e:
+            logging.error(f"하루 손실률 체크 중 오류: {e}")
+            return False
+
+    def reset_daily_limit(self):
+        """자정 기준으로 손실 상한선 초기화"""
+        try:
+            today = datetime.now().date()
+            if today > self.last_reset_date:
+                self.starting_balance = self.get_total_balance()
+                self.last_reset_date = today
+                logging.info(f"🔄 하루 손실 상한선 초기화 완료 (기준 잔고: {self.starting_balance:,}원)")
+        except Exception as e:
+            logging.error(f"하루 손실 상한선 초기화 중 오류: {e}")
+
+    def get_total_balance(self):
+        """총 자산 계산"""
+        try:
+            total_value = self.account_info["예수금"]
+            for code, pos in self.positions.items():
+                current_price = self.api.get_current_price(code)
+                total_value += pos["shares"] * current_price
+            return total_value
+        except Exception as e:
+            logging.error(f"총 자산 계산 중 오류: {e}")
+            return self.account_info["예수금"]
+
 
 def main():
     """메인 함수"""
@@ -834,6 +898,8 @@ def main():
                        help='일일 요약 리포트만 생성하고 종료')
     parser.add_argument('--emergency-stop', action='store_true',
                        help='비상정지 테스트 실행')
+    parser.add_argument('--daily-loss-test', action='store_true',
+                       help='하루 손실 상한선 테스트 실행')
     parser.add_argument('--test', action='store_true',
                        help='테스트 모드로 실행')
     
@@ -894,6 +960,43 @@ def main():
         except Exception as e:
             logging.error(f"비상정지 테스트 중 오류: {e}")
             print(f"❌ 비상정지 테스트 실패: {e}")
+        
+        return
+    
+    # 하루 손실 상한선 테스트
+    if args.daily_loss_test:
+        print("📉 하루 손실 상한선 테스트 실행")
+        print("=" * 50)
+        
+        try:
+            # API 초기화
+            api = KiwoomAPI()
+            api.login()
+            
+            # 계좌 정보 조회
+            account_info = api.get_account_info()
+            account = account_info["계좌번호"]
+            
+            # 트레이더 초기화 (손실 한도 -1%로 설정)
+            trader = RealtimeTrader(api, account, daily_loss_limit=-1.0)
+            trader.initialize()
+            
+            # 매수 실행 (손실 발생 시뮬레이션)
+            print("1️⃣ 매수 실행 (손실 발생 시뮬레이션)")
+            trader.execute_buy("005930.KS")
+            
+            # 손실 상한선 체크
+            print("2️⃣ 하루 손실 상한선 체크")
+            if trader.check_daily_loss_limit():
+                print("✅ 하루 손실 상한선 초과로 비상정지 실행됨")
+            else:
+                print("ℹ️ 손실 상한선 내에서 정상 운영 중")
+            
+            print("✅ 하루 손실 상한선 테스트 완료!")
+            
+        except Exception as e:
+            logging.error(f"하루 손실 상한선 테스트 중 오류: {e}")
+            print(f"❌ 하루 손실 상한선 테스트 실패: {e}")
         
         return
     

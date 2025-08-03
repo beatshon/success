@@ -125,6 +125,7 @@ TELEGRAM_ENABLED = True
 - API 연결 실패
 - 메모리 부족
 - 수동 비상정지 실행
+- **하루 손실 상한선 초과**
 
 ### 2. 비상정지 동작
 1. **즉시 매매 중단**: 모든 매수/매도 주문 중단
@@ -137,6 +138,42 @@ TELEGRAM_ENABLED = True
 ### 3. 비상정지 테스트
 ```bash
 python test_emergency_stop.py
+```
+
+## 📉 하루 손실 상한선 시스템
+
+### 1. 기능 설명
+- **일일 손실 한도 설정**: 기본 -3% (설정 가능)
+- **실시간 모니터링**: 매 트레이딩 루프마다 손실률 체크
+- **자동 리셋**: 자정 기준으로 손실 상한선 초기화
+- **즉시 비상정지**: 한도 초과 시 모든 포지션 청산
+
+### 2. 설정 방법
+```python
+# 기본 설정 (-3%)
+trader = RealtimeTrader(api, account)
+
+# 사용자 정의 설정 (-1%)
+trader = RealtimeTrader(api, account, daily_loss_limit=-1.0)
+
+# 보수적 설정 (-5%)
+trader = RealtimeTrader(api, account, daily_loss_limit=-5.0)
+```
+
+### 3. 동작 원리
+1. **기준 잔고 설정**: 트레이딩 시작 시점의 총 자산
+2. **실시간 계산**: 현재 총 자산과 기준 잔고 비교
+3. **손실률 계산**: `(현재총자산 - 기준잔고) / 기준잔고 * 100`
+4. **한도 체크**: 설정된 손실 한도와 비교
+5. **자동 리셋**: 자정 넘어가면 새로운 기준 잔고 설정
+
+### 4. 테스트 방법
+```bash
+# 기본 테스트
+python cross_platform_trader.py --daily-loss-test
+
+# 상세 테스트
+python test_daily_loss_limit.py
 ```
 
 ## 🔧 로그 분석 도구
@@ -292,6 +329,9 @@ python cross_platform_trader.py --daily-summary
 
 # 비상정지 테스트
 python cross_platform_trader.py --emergency-stop
+
+# 하루 손실 상한선 테스트
+python cross_platform_trader.py --daily-loss-test
 
 # 테스트 모드 (5회 반복)
 python cross_platform_trader.py --test
