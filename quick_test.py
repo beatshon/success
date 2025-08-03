@@ -1,52 +1,61 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-매우 빠른 키움 API 에러 처리 테스트
+간단한 테스트
 """
 
-import os
-import time
+print("=== 시스템 테스트 시작 ===")
 
-# 빠른 테스트 환경 설정
-os.environ['DISABLE_BACKGROUND_MONITORING'] = '1'
-os.environ['DISABLE_AUTO_RECOVERY'] = '1'
-
-def quick_test():
-    """매우 빠른 테스트"""
-    start_time = time.time()
+try:
+    # 기본 모듈 import 테스트
+    print("1. 기본 모듈 import 테스트...")
+    import numpy as np
+    import pandas as pd
+    from datetime import datetime
+    print("   ✅ 기본 모듈 import 성공")
     
-    try:
-        # 모듈 import
-        from error_handler import ErrorType, ErrorLevel, handle_error
-        from system_monitor import record_api_call, get_performance_stats
-        
-        # 빠른 에러 처리
-        handle_error(ErrorType.API, '빠른 테스트', error_level=ErrorLevel.WARNING)
-        
-        # 빠른 API 호출 기록
-        record_api_call('quick_test', 0.001, True)
-        
-        # 통계 확인
-        stats = get_performance_stats()
-        
-        end_time = time.time()
-        execution_time = end_time - start_time
-        
-        print(f"✅ 빠른 테스트 완료!")
-        print(f"⏱️  실행 시간: {execution_time:.3f}초")
-        print(f"📊 API 함수 수: {len(stats['api_stats'])}개")
-        print(f"📈 에러 수: {stats.get('error_stats', {}).get('total_errors', 0)}개")
-        
-        return True
-        
-    except Exception as e:
-        print(f"❌ 테스트 실패: {e}")
-        return False
-
-if __name__ == "__main__":
-    print("🚀 매우 빠른 키움 API 에러 처리 테스트 시작...")
-    success = quick_test()
+    # 향상된 리스크 관리 테스트
+    print("2. 향상된 리스크 관리 테스트...")
+    from enhanced_risk_management import EnhancedRiskManager, RiskLevel, MarketVolatility
     
-    if success:
-        print("🎉 모든 테스트가 성공적으로 완료되었습니다!")
-    else:
-        print("💥 테스트에 실패했습니다.") 
+    risk_manager = EnhancedRiskManager()
+    
+    # 간단한 손절/익절 계산 테스트
+    stop_loss, take_profit, risk_info = risk_manager.calculate_stop_loss_and_take_profit(
+        current_price=68900,
+        signal_strength='strong_buy',
+        confidence_score=0.8,
+        volatility=0.02,
+        market_condition='bull_market',
+        stock_volatility=0.025
+    )
+    
+    print(f"   ✅ 손절가: {stop_loss:,.0f}원")
+    print(f"   ✅ 익절가: {take_profit:,.0f}원")
+    print(f"   ✅ 위험도: {risk_info.get('risk_level', 'N/A')}")
+    
+    # 포지션 크기 계산 테스트
+    position_size = risk_manager.calculate_position_size(
+        available_capital=10000000,
+        risk_level=RiskLevel.LOW,
+        confidence_score=0.8,
+        stock_volatility=0.025
+    )
+    
+    print(f"   ✅ 포지션 크기: {position_size:,.0f}원")
+    
+    print("3. 통합 분석기 import 테스트...")
+    from integrated_trend_stock_analyzer import IntegratedTrendStockAnalyzer, SignalStrength, MarketCondition
+    print("   ✅ 통합 분석기 import 성공")
+    
+    print("4. 웹 서버 import 테스트...")
+    from integrated_trend_stock_server import IntegratedTrendStockServer
+    print("   ✅ 웹 서버 import 성공")
+    
+    print("\n=== 모든 테스트 성공! ===")
+    print("시스템이 정상적으로 작동합니다.")
+    
+except Exception as e:
+    print(f"❌ 테스트 실패: {e}")
+    import traceback
+    traceback.print_exc() 

@@ -2,49 +2,42 @@
 # -*- coding: utf-8 -*-
 """
 통합 자동매매 시스템
-Mac 환경에서 네이버 트렌드 분석과 키움 API를 연동한 자동매매 시스템
+키움 API와 트레이딩 전략을 통합하여 완전한 자동매매 시스템을 제공합니다.
 """
 
 import sys
 import time
-import threading
-import queue
 import json
+import threading
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from enum import Enum
 from loguru import logger
 import pandas as pd
 import numpy as np
 
-# Mac 호환 키움 API
-from kiwoom_mac_compatible import KiwoomMacAPI, OrderType, OrderStatus
-
-# 네이버 트렌드 분석
-from naver_trend_analyzer import NaverTrendAnalyzer
-
-# 에러 처리
+# 키움 API 및 전략 모듈들
+from kiwoom_mac_compatible import KiwoomMacAPI
+from trading_strategy import (
+    StrategyManager, create_default_strategies, TradingSignal, 
+    SignalType, StrategyType
+)
+from technical_indicators import calculate_sma, calculate_rsi
 from error_handler import ErrorType, ErrorLevel, handle_error, retry_operation
 
-class TradeMode(Enum):
+class TradingMode(Enum):
     """거래 모드"""
-    PAPER_TRADING = "페이퍼 트레이딩"  # 모의 거래
-    REAL_TRADING = "실제 거래"        # 실제 거래
-    SIMULATION = "시뮬레이션"         # 시뮬레이션
+    PAPER_TRADING = "페이퍼트레이딩"
+    REAL_TRADING = "실제거래"
+    SIMULATION = "시뮬레이션"
 
-@dataclass
-class TradeConfig:
-    """거래 설정"""
-    mode: TradeMode = TradeMode.PAPER_TRADING
-    max_position_size: float = 0.1  # 전체 자금의 최대 10%
-    stop_loss_rate: float = 0.05    # 5% 손절매
-    take_profit_rate: float = 0.15  # 15% 익절매
-    max_daily_loss: float = 0.03    # 일일 최대 손실 3%
-    min_confidence: float = 0.7     # 최소 신뢰도 70%
-    trading_hours: tuple = (9, 15)  # 거래 시간 (9시~15시)
-    max_orders_per_day: int = 10    # 일일 최대 주문 수
-    kiwoom_server_url: str = "http://localhost:8080"  # 키움 서버 URL
+class RiskLevel(Enum):
+    """위험 수준"""
+    LOW = "낮음"
+    MEDIUM = "보통"
+    HIGH = "높음"
+    VERY_HIGH = "매우높음"
 
 @dataclass
 class Position:
@@ -56,162 +49,199 @@ class Position:
     current_price: float
     profit_loss: float
     profit_loss_rate: float
-    entry_time: datetime
-    stop_loss_price: float
-    take_profit_price: float
+    timestamp: datetime
 
 @dataclass
-class TradingSignal:
-    """거래 신호"""
-    code: str
-    name: str
-    signal_type: str  # 'BUY', 'SELL', 'HOLD'
-    confidence: float
-    price: float
-    reason: str
-    timestamp: datetime
+class TradeConfig:
+    """거래 설정"""
+    # 기본 설정
+    trading_mode: TradingMode = TradingMode.PAPER_TRADING
+    risk_level: RiskLevel = RiskLevel.MEDIUM
+    
+    # 자금 관리
+    initial_capital: float = 10000000  # 1천만원
+    max_position_size: float = 1000000  # 100만원
+    daily_loss_limit: float = 500000   # 50만원
+    max_positions: int = 5
+    
+    # 손절/익절
+    stop_loss_percentage: float = 5.0
+    take_profit_percentage: float = 10.0
+    trailing_stop: bool = True
+    trailing_stop_percentage: float = 3.0
+    
+    # 신호 필터링
+    min_confidence: float = 0.6
+    min_volume: int = 1000
+    max_spread_percentage: float = 2.0
+    
+    # 시간 제한
+    trading_start_time: str = "09:00"
+    trading_end_time: str = "15:30"
+    lunch_break_start: str = "11:30"
+    lunch_break_end: str = "13:00"
 
 class IntegratedAutoTrader:
     """통합 자동매매 시스템"""
     
     def __init__(self, config: TradeConfig):
         self.config = config
+        self.kiwoom_api = None
+        self.strategy_manager = None
         
-        # 키움 API 초기화
-        self.kiwoom_api = KiwoomMacAPI(config.kiwoom_server_url)
-        
-        # 네이버 트렌드 분석기 초기화
-        self.trend_analyzer = NaverTrendAnalyzer()
-        
-        # 거래 상태
+        # 시스템 상태
         self.is_running = False
         self.is_connected = False
-        self.account = None
-        self.deposit = 0
+        self.is_logged_in = False
         
-        # 포지션 관리
-        self.positions: Dict[str, Position] = {}
-        self.pending_orders = {}
-        self.order_history = []
+        # 거래 상태
+        self.positions = {}  # 현재 포지션
+        self.orders = {}     # 주문 정보
+        self.trades = []     # 거래 이력
+        self.daily_pnl = 0.0 # 일일 손익
         
-        # 성과 추적
-        self.daily_stats = {
+        # 데이터 저장소
+        self.price_data = {}  # 종목별 가격 데이터
+        self.signal_history = []  # 신호 히스토리
+        
+        # 스레드
+        self.trading_thread = None
+        self.monitoring_thread = None
+        
+        # 콜백 함수들
+        self.signal_callback = None
+        self.trade_callback = None
+        self.error_callback = None
+        
+        # 통계
+        self.stats = {
             'total_trades': 0,
             'winning_trades': 0,
             'losing_trades': 0,
             'total_profit': 0.0,
-            'total_loss': 0.0,
             'max_drawdown': 0.0,
-            'current_drawdown': 0.0
+            'sharpe_ratio': 0.0
         }
-        
-        # 스레드 및 큐
-        self.signal_queue = queue.Queue()
-        self.trading_thread = None
-        self.monitoring_thread = None
-        self.analysis_thread = None
-        
-        # 콜백 함수
-        self.on_trade_executed = None
-        self.on_position_updated = None
-        self.on_error_occurred = None
-        
-        # 거래 대상 종목
-        self.target_stocks = [
-            '005930',  # 삼성전자
-            '000660',  # SK하이닉스
-            '035420',  # NAVER
-            '035720',  # 카카오
-            '051910',  # LG화학
-            '006400',  # 삼성SDI
-            '207940',  # 삼성바이오로직스
-            '068270',  # 셀트리온
-            '323410',  # 카카오뱅크
-            '035760'   # CJ대한통운
-        ]
         
         logger.info("통합 자동매매 시스템 초기화 완료")
     
-    def connect_kiwoom(self, user_id: str, password: str, account: str) -> bool:
-        """키움 API 연결 및 로그인"""
+    def initialize(self, server_url: str = "http://localhost:8080"):
+        """시스템 초기화"""
         try:
-            # 서버 연결
-            if not self.kiwoom_api.connect():
-                logger.error("키움 서버 연결 실패")
-                return False
+            logger.info("자동매매 시스템 초기화 시작")
             
-            # 로그인
-            if not self.kiwoom_api.login(user_id, password, account):
-                logger.error("키움 API 로그인 실패")
-                return False
+            # 키움 API 초기화
+            self.kiwoom_api = KiwoomMacAPI(server_url)
             
-            self.is_connected = True
-            self.account = account
+            # 전략 매니저 초기화
+            self.strategy_manager = create_default_strategies()
             
-            # 계좌 정보 조회
-            account_info = self.kiwoom_api.get_account_info()
-            logger.info(f"계좌 정보: {account_info}")
+            # 콜백 설정
+            self.kiwoom_api.set_login_callback(self._on_login)
+            self.kiwoom_api.set_real_data_callback(self._on_real_data)
+            self.kiwoom_api.set_order_callback(self._on_order)
             
-            # 예수금 정보 조회
-            deposit_info = self.kiwoom_api.get_deposit_info(account)
-            if deposit_info:
-                self.deposit = float(deposit_info.get('주문가능금액', 0))
-                logger.info(f"예수금: {self.deposit:,}원")
-            
-            # 보유 종목 조회
-            self._update_positions()
-            
-            logger.info("키움 API 연결 및 로그인 성공")
+            logger.info("자동매매 시스템 초기화 완료")
             return True
             
         except Exception as e:
-            handle_error(
-                ErrorType.API,
-                "키움 API 연결 실패",
-                exception=e,
-                error_level=ErrorLevel.CRITICAL
-            )
+            logger.error(f"시스템 초기화 실패: {e}")
+            return False
+    
+    def connect(self, timeout: int = 30) -> bool:
+        """키움 API 연결"""
+        try:
+            logger.info("키움 API 연결 시도")
+            success = self.kiwoom_api.connect(timeout)
+            
+            if success:
+                self.is_connected = True
+                logger.info("키움 API 연결 성공")
+            else:
+                logger.error("키움 API 연결 실패")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"연결 오류: {e}")
+            return False
+    
+    def login(self, user_id: str, password: str, account: str, timeout: int = 60) -> bool:
+        """키움 API 로그인"""
+        try:
+            logger.info("키움 API 로그인 시도")
+            success = self.kiwoom_api.login(user_id, password, account, timeout)
+            
+            if success:
+                self.is_logged_in = True
+                logger.info("키움 API 로그인 성공")
+                
+                # 계좌 정보 조회
+                self._load_account_info()
+            else:
+                logger.error("키움 API 로그인 실패")
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"로그인 오류: {e}")
             return False
     
     def start_trading(self):
         """자동매매 시작"""
-        if not self.is_connected:
-            logger.error("키움 API가 연결되지 않았습니다.")
-            return False
-        
         if self.is_running:
             logger.warning("자동매매가 이미 실행 중입니다.")
+            return False
+        
+        if not self.is_connected or not self.is_logged_in:
+            logger.error("키움 API에 연결되지 않았습니다.")
+            return False
+        
+        try:
+            logger.info("자동매매 시작")
+            self.is_running = True
+            
+            # 거래 스레드 시작
+            self.trading_thread = threading.Thread(target=self._trading_loop, daemon=True)
+            self.trading_thread.start()
+            
+            # 모니터링 스레드 시작
+            self.monitoring_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
+            self.monitoring_thread.start()
+            
+            logger.info("자동매매 시작 완료")
             return True
-        
-        self.is_running = True
-        
-        # 스레드 시작
-        self.trading_thread = threading.Thread(target=self._trading_loop, daemon=True)
-        self.monitoring_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
-        self.analysis_thread = threading.Thread(target=self._analysis_loop, daemon=True)
-        
-        self.trading_thread.start()
-        self.monitoring_thread.start()
-        self.analysis_thread.start()
-        
-        logger.info("자동매매 시작")
-        return True
+            
+        except Exception as e:
+            logger.error(f"자동매매 시작 실패: {e}")
+            self.is_running = False
+            return False
     
     def stop_trading(self):
         """자동매매 중지"""
-        self.is_running = False
+        if not self.is_running:
+            logger.warning("자동매매가 실행 중이 아닙니다.")
+            return
         
-        if self.trading_thread:
-            self.trading_thread.join(timeout=5)
-        if self.monitoring_thread:
-            self.monitoring_thread.join(timeout=5)
-        if self.analysis_thread:
-            self.analysis_thread.join(timeout=5)
-        
-        logger.info("자동매매 중지")
+        try:
+            logger.info("자동매매 중지")
+            self.is_running = False
+            
+            # 스레드 종료 대기
+            if self.trading_thread:
+                self.trading_thread.join(timeout=5)
+            if self.monitoring_thread:
+                self.monitoring_thread.join(timeout=5)
+            
+            logger.info("자동매매 중지 완료")
+            
+        except Exception as e:
+            logger.error(f"자동매매 중지 오류: {e}")
     
     def _trading_loop(self):
         """거래 루프"""
+        logger.info("거래 루프 시작")
+        
         while self.is_running:
             try:
                 # 거래 시간 확인
@@ -220,645 +250,634 @@ class IntegratedAutoTrader:
                     continue
                 
                 # 일일 손실 한도 확인
-                if not self._check_daily_loss_limit():
-                    logger.warning("일일 손실 한도 초과로 거래 중지")
-                    time.sleep(300)  # 5분 대기
-                    continue
+                if self._check_daily_loss_limit():
+                    logger.warning("일일 손실 한도 도달. 거래 중지.")
+                    break
                 
-                # 신호 처리
-                try:
-                    signal = self.signal_queue.get_nowait()
-                    self._process_signal(signal)
-                except queue.Empty:
-                    pass
+                # 실시간 데이터 수집
+                real_data = self.kiwoom_api.get_real_data_cache()
+                
+                # 각 종목에 대해 신호 생성
+                for code, data in real_data.items():
+                    if not data or 'data' not in data:
+                        continue
+                    
+                    price_data = data['data']
+                    current_price = price_data.get('현재가', 0)
+                    
+                    if current_price <= 0:
+                        continue
+                    
+                    # 가격 데이터 업데이트
+                    self._update_price_data(code, current_price)
+                    
+                    # 전략 신호 생성
+                    signals = self._generate_signals(code, current_price)
+                    
+                    # 신호 처리
+                    for signal in signals:
+                        if signal.confidence >= self.config.min_confidence:
+                            self._process_signal(signal)
                 
                 time.sleep(1)  # 1초 대기
                 
             except Exception as e:
-                handle_error(
-                    ErrorType.TRADING,
-                    "거래 루프 에러",
-                    exception=e,
-                    error_level=ErrorLevel.CRITICAL
-                )
+                logger.error(f"거래 루프 오류: {e}")
                 time.sleep(5)
     
     def _monitoring_loop(self):
         """모니터링 루프"""
+        logger.info("모니터링 루프 시작")
+        
         while self.is_running:
             try:
                 # 포지션 모니터링
                 self._monitor_positions()
                 
-                # 손절매/익절매 확인
+                # 손절/익절 체크
                 self._check_stop_loss_take_profit()
                 
-                # 주문 상태 확인
-                self._check_order_status()
+                # 통계 업데이트
+                self._update_statistics()
                 
                 time.sleep(5)  # 5초 대기
                 
             except Exception as e:
-                handle_error(
-                    ErrorType.MONITORING,
-                    "모니터링 루프 에러",
-                    exception=e,
-                    error_level=ErrorLevel.WARNING
-                )
+                logger.error(f"모니터링 루프 오류: {e}")
                 time.sleep(10)
     
-    def _analysis_loop(self):
-        """분석 루프"""
-        while self.is_running:
-            try:
-                # 거래 시간 확인
-                if not self._is_trading_time():
-                    time.sleep(300)  # 5분 대기
-                    continue
-                
-                # 각 종목별 분석
-                for stock_code in self.target_stocks:
-                    try:
-                        # 네이버 트렌드 분석
-                        signal = self._analyze_stock(stock_code)
-                        
-                        if signal and signal.confidence >= self.config.min_confidence:
-                            self.signal_queue.put(signal)
-                            logger.info(f"신호 생성: {stock_code} {signal.signal_type} (신뢰도: {signal.confidence:.2f})")
-                    
-                    except Exception as e:
-                        handle_error(
-                            ErrorType.ANALYSIS,
-                            f"종목 분석 실패 ({stock_code})",
-                            exception=e,
-                            error_level=ErrorLevel.WARNING
-                        )
-                
-                time.sleep(60)  # 1분 대기
-                
-            except Exception as e:
-                handle_error(
-                    ErrorType.ANALYSIS,
-                    "분석 루프 에러",
-                    exception=e,
-                    error_level=ErrorLevel.WARNING
-                )
-                time.sleep(60)
+    def _update_price_data(self, code: str, price: float):
+        """가격 데이터 업데이트"""
+        if code not in self.price_data:
+            self.price_data[code] = []
+        
+        self.price_data[code].append({
+            'price': price,
+            'timestamp': datetime.now()
+        })
+        
+        # 최대 1000개 데이터만 유지
+        if len(self.price_data[code]) > 1000:
+            self.price_data[code] = self.price_data[code][-1000:]
+        
+        # 전략 매니저에 가격 데이터 전달
+        if self.strategy_manager:
+            self.strategy_manager.update_price(price)
     
-    def _analyze_stock(self, stock_code: str) -> Optional[TradingSignal]:
-        """종목 분석"""
+    def _generate_signals(self, code: str, current_price: float) -> List[TradingSignal]:
+        """신호 생성"""
+        signals = []
+        
         try:
-            # 현재가 조회
-            current_price = self.kiwoom_api.get_current_price(stock_code)
-            if not current_price:
-                return None
+            # 전략 매니저에서 신호 생성
+            if self.strategy_manager:
+                strategy_signals = self.strategy_manager.generate_signals()
+                
+                for signal in strategy_signals:
+                    # 종목 코드 추가
+                    signal.code = code
+                    signal.price = current_price
+                    signals.append(signal)
             
-            # 네이버 트렌드 분석
-            trend_data = self.trend_analyzer.get_investment_signals(stock_code)
-            
-            if not trend_data:
-                return None
-            
-            # 신호 생성
-            signal_type = trend_data.get('overall_signal', 'HOLD')
-            confidence = trend_data.get('confidence', 0.0)
-            
-            # 종목명 조회
-            stock_name = self._get_stock_name(stock_code)
-            
-            signal = TradingSignal(
-                code=stock_code,
-                name=stock_name,
-                signal_type=signal_type,
-                confidence=confidence,
-                price=current_price,
-                reason=trend_data.get('reason', ''),
-                timestamp=datetime.now()
-            )
-            
-            return signal
+            # 신호 히스토리에 추가
+            self.signal_history.extend(signals)
             
         except Exception as e:
-            handle_error(
-                ErrorType.ANALYSIS,
-                f"종목 분석 실패 ({stock_code})",
-                exception=e,
-                error_level=ErrorLevel.WARNING
-            )
-            return None
+            logger.error(f"신호 생성 오류: {e}")
+        
+        return signals
     
     def _process_signal(self, signal: TradingSignal):
         """신호 처리"""
         try:
-            if signal.signal_type == 'BUY':
+            logger.info(f"신호 처리: {signal.code} - {signal.signal_type.value} (신뢰도: {signal.confidence:.2f})")
+            
+            if signal.signal_type in [SignalType.BUY, SignalType.STRONG_BUY]:
                 self._execute_buy_signal(signal)
-            elif signal.signal_type == 'SELL':
+            elif signal.signal_type in [SignalType.SELL, SignalType.STRONG_SELL]:
                 self._execute_sell_signal(signal)
-            else:
-                logger.debug(f"보유 신호: {signal.code}")
+            
+            # 콜백 호출
+            if self.signal_callback:
+                self.signal_callback(signal)
                 
         except Exception as e:
-            handle_error(
-                ErrorType.TRADING,
-                f"신호 처리 실패 ({signal.code})",
-                exception=e,
-                error_level=ErrorLevel.CRITICAL
-            )
+            logger.error(f"신호 처리 오류: {e}")
     
     def _execute_buy_signal(self, signal: TradingSignal):
         """매수 신호 실행"""
         try:
-            # 이미 보유 중인지 확인
-            if signal.code in self.positions:
-                logger.debug(f"이미 보유 중: {signal.code}")
+            code = signal.code
+            price = signal.price
+            
+            # 매수 조건 확인
+            if not self._can_buy(code, price):
+                logger.info(f"매수 조건 불충족: {code}")
                 return
             
             # 주문 수량 계산
-            quantity = self._calculate_position_size(signal.price)
+            quantity = self._calculate_buy_quantity(code, price)
+            
             if quantity <= 0:
-                logger.warning(f"주문 수량이 0입니다: {signal.code}")
+                logger.warning(f"매수 수량이 0입니다: {code}")
                 return
             
             # 주문 실행
-            if self.config.mode == TradeMode.PAPER_TRADING:
-                success = self._paper_trading_buy(signal.code, quantity, signal.price)
+            if self.config.trading_mode == TradingMode.PAPER_TRADING:
+                self._execute_paper_buy(code, price, quantity, signal)
             else:
-                result = self.kiwoom_api.order_stock(
-                    self.account, signal.code, quantity, signal.price, "신규매수"
-                )
-                success = result.get('success', False)
+                self._execute_real_buy(code, price, quantity, signal)
             
-            if success:
-                # 포지션 추가
-                position = Position(
-                    code=signal.code,
-                    name=signal.name,
-                    quantity=quantity,
-                    avg_price=signal.price,
-                    current_price=signal.price,
-                    profit_loss=0.0,
-                    profit_loss_rate=0.0,
-                    entry_time=datetime.now(),
-                    stop_loss_price=signal.price * (1 - self.config.stop_loss_rate),
-                    take_profit_price=signal.price * (1 + self.config.take_profit_rate)
-                )
-                
-                self.positions[signal.code] = position
-                self.daily_stats['total_trades'] += 1
-                
-                logger.info(f"매수 성공: {signal.code} {quantity}주 @ {signal.price:,}원")
-                
-                if self.on_trade_executed:
-                    self.on_trade_executed(signal, position)
-            else:
-                logger.error(f"매수 실패: {signal.code}")
-                
+            logger.info(f"매수 주문 실행: {code} - {quantity}주 - {price:,}원")
+            
         except Exception as e:
-            handle_error(
-                ErrorType.TRADING,
-                f"매수 신호 실행 실패 ({signal.code})",
-                exception=e,
-                error_level=ErrorLevel.CRITICAL
-            )
+            logger.error(f"매수 신호 실행 오류: {e}")
     
     def _execute_sell_signal(self, signal: TradingSignal):
         """매도 신호 실행"""
         try:
-            # 보유 중인지 확인
-            if signal.code not in self.positions:
-                logger.debug(f"보유하지 않음: {signal.code}")
+            code = signal.code
+            price = signal.price
+            
+            # 매도 조건 확인
+            if not self._can_sell(code, price):
+                logger.info(f"매도 조건 불충족: {code}")
                 return
             
-            position = self.positions[signal.code]
+            # 보유 수량 확인
+            if code not in self.positions:
+                logger.warning(f"보유하지 않은 종목: {code}")
+                return
+            
+            quantity = self.positions[code].quantity
             
             # 주문 실행
-            if self.config.mode == TradeMode.PAPER_TRADING:
-                success = self._paper_trading_sell(signal.code, position.quantity, signal.price)
+            if self.config.trading_mode == TradingMode.PAPER_TRADING:
+                self._execute_paper_sell(code, price, quantity, signal)
             else:
-                result = self.kiwoom_api.order_stock(
-                    self.account, signal.code, position.quantity, signal.price, "신규매도"
-                )
-                success = result.get('success', False)
+                self._execute_real_sell(code, price, quantity, signal)
             
-            if success:
-                # 수익/손실 계산
-                profit_loss = (signal.price - position.avg_price) * position.quantity
-                profit_loss_rate = (signal.price - position.avg_price) / position.avg_price
-                
-                # 성과 업데이트
-                self._update_performance(profit_loss)
-                
-                # 포지션 제거
-                del self.positions[signal.code]
-                self.daily_stats['total_trades'] += 1
-                
-                logger.info(f"매도 성공: {signal.code} {position.quantity}주 @ {signal.price:,}원 (손익: {profit_loss:+,}원)")
-                
-                if self.on_trade_executed:
-                    self.on_trade_executed(signal, position)
-            else:
-                logger.error(f"매도 실패: {signal.code}")
-                
+            logger.info(f"매도 주문 실행: {code} - {quantity}주 - {price:,}원")
+            
         except Exception as e:
-            handle_error(
-                ErrorType.TRADING,
-                f"매도 신호 실행 실패 ({signal.code})",
-                exception=e,
-                error_level=ErrorLevel.CRITICAL
-            )
+            logger.error(f"매도 신호 실행 오류: {e}")
     
-    def _paper_trading_buy(self, code: str, quantity: int, price: float) -> bool:
-        """페이퍼 트레이딩 매수"""
+    def _can_buy(self, code: str, price: float) -> bool:
+        """매수 가능 여부 확인"""
         try:
-            total_cost = quantity * price
-            if total_cost > self.deposit:
-                logger.warning(f"예수금 부족: {code}")
+            # 최대 포지션 수 확인
+            if len(self.positions) >= self.config.max_positions:
                 return False
             
-            self.deposit -= total_cost
-            logger.info(f"페이퍼 매수: {code} {quantity}주 @ {price:,}원 (잔고: {self.deposit:,}원)")
+            # 이미 보유 중인 종목인지 확인
+            if code in self.positions:
+                return False
+            
+            # 자금 확인
+            available_capital = self._get_available_capital()
+            required_amount = price * self._calculate_buy_quantity(code, price)
+            
+            if required_amount > available_capital:
+                return False
+            
             return True
             
         except Exception as e:
-            handle_error(
-                ErrorType.TRADING,
-                f"페이퍼 매수 실패 ({code})",
-                exception=e,
-                error_level=ErrorLevel.WARNING
-            )
+            logger.error(f"매수 조건 확인 오류: {e}")
             return False
     
-    def _paper_trading_sell(self, code: str, quantity: int, price: float) -> bool:
+    def _can_sell(self, code: str, price: float) -> bool:
+        """매도 가능 여부 확인"""
+        try:
+            # 보유 종목인지 확인
+            if code not in self.positions:
+                return False
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"매도 조건 확인 오류: {e}")
+            return False
+    
+    def _calculate_buy_quantity(self, code: str, price: float) -> int:
+        """매수 수량 계산"""
+        try:
+            # 최대 포지션 크기 기반 계산
+            max_quantity = int(self.config.max_position_size / price)
+            
+            # 최소 거래 단위 (1주)
+            if max_quantity < 1:
+                return 0
+            
+            return max_quantity
+            
+        except Exception as e:
+            logger.error(f"매수 수량 계산 오류: {e}")
+            return 0
+    
+    def _execute_paper_buy(self, code: str, price: float, quantity: int, signal: TradingSignal):
+        """페이퍼 트레이딩 매수"""
+        try:
+            # 포지션 생성
+            position = Position(
+                code=code,
+                name=f"{code}_종목",
+                quantity=quantity,
+                avg_price=price,
+                current_price=price,
+                profit_loss=0.0,
+                profit_loss_rate=0.0,
+                timestamp=datetime.now()
+            )
+            
+            self.positions[code] = position
+            
+            # 거래 이력 추가
+            trade = {
+                'timestamp': datetime.now(),
+                'code': code,
+                'type': '매수',
+                'quantity': quantity,
+                'price': price,
+                'amount': price * quantity,
+                'signal': signal
+            }
+            self.trades.append(trade)
+            
+            logger.info(f"페이퍼 매수 완료: {code} - {quantity}주 - {price:,}원")
+            
+        except Exception as e:
+            logger.error(f"페이퍼 매수 오류: {e}")
+    
+    def _execute_paper_sell(self, code: str, price: float, quantity: int, signal: TradingSignal):
         """페이퍼 트레이딩 매도"""
         try:
-            total_revenue = quantity * price
-            self.deposit += total_revenue
-            logger.info(f"페이퍼 매도: {code} {quantity}주 @ {price:,}원 (잔고: {self.deposit:,}원)")
-            return True
+            if code not in self.positions:
+                return
+            
+            position = self.positions[code]
+            
+            # 손익 계산
+            profit_loss = (price - position.avg_price) * quantity
+            profit_loss_rate = (price - position.avg_price) / position.avg_price * 100
+            
+            # 거래 이력 추가
+            trade = {
+                'timestamp': datetime.now(),
+                'code': code,
+                'type': '매도',
+                'quantity': quantity,
+                'price': price,
+                'amount': price * quantity,
+                'profit_loss': profit_loss,
+                'profit_loss_rate': profit_loss_rate,
+                'signal': signal
+            }
+            self.trades.append(trade)
+            
+            # 통계 업데이트
+            self.stats['total_trades'] += 1
+            if profit_loss > 0:
+                self.stats['winning_trades'] += 1
+            else:
+                self.stats['losing_trades'] += 1
+            
+            self.stats['total_profit'] += profit_loss
+            self.daily_pnl += profit_loss
+            
+            # 포지션 제거
+            del self.positions[code]
+            
+            logger.info(f"페이퍼 매도 완료: {code} - {quantity}주 - {price:,}원 (손익: {profit_loss:,}원)")
             
         except Exception as e:
-            handle_error(
-                ErrorType.TRADING,
-                f"페이퍼 매도 실패 ({code})",
-                exception=e,
-                error_level=ErrorLevel.WARNING
-            )
-            return False
+            logger.error(f"페이퍼 매도 오류: {e}")
     
-    def _calculate_position_size(self, price: float) -> int:
-        """주문 수량 계산"""
+    def _execute_real_buy(self, code: str, price: float, quantity: int, signal: TradingSignal):
+        """실제 매수 주문"""
         try:
-            max_amount = self.deposit * self.config.max_position_size
-            quantity = int(max_amount / price)
-            return max(quantity, 1)  # 최소 1주
+            # 계좌 정보 조회
+            account_info = self.kiwoom_api.get_account_info()
+            if not account_info:
+                logger.error("계좌 정보를 가져올 수 없습니다.")
+                return
+            
+            account = list(account_info.keys())[0]
+            
+            # 주문 실행
+            order_result = self.kiwoom_api.order_stock(
+                account=account,
+                code=code,
+                quantity=quantity,
+                price=int(price),
+                order_type="신규매수"
+            )
+            
+            if order_result and order_result.get('success'):
+                logger.info(f"실제 매수 주문 성공: {code}")
+            else:
+                logger.error(f"실제 매수 주문 실패: {code}")
             
         except Exception as e:
-            handle_error(
-                ErrorType.TRADING,
-                "주문 수량 계산 실패",
-                exception=e,
-                error_level=ErrorLevel.WARNING
+            logger.error(f"실제 매수 주문 오류: {e}")
+    
+    def _execute_real_sell(self, code: str, price: float, quantity: int, signal: TradingSignal):
+        """실제 매도 주문"""
+        try:
+            # 계좌 정보 조회
+            account_info = self.kiwoom_api.get_account_info()
+            if not account_info:
+                logger.error("계좌 정보를 가져올 수 없습니다.")
+                return
+            
+            account = list(account_info.keys())[0]
+            
+            # 주문 실행
+            order_result = self.kiwoom_api.order_stock(
+                account=account,
+                code=code,
+                quantity=quantity,
+                price=int(price),
+                order_type="신규매도"
             )
-            return 0
+            
+            if order_result and order_result.get('success'):
+                logger.info(f"실제 매도 주문 성공: {code}")
+            else:
+                logger.error(f"실제 매도 주문 실패: {code}")
+            
+        except Exception as e:
+            logger.error(f"실제 매도 주문 오류: {e}")
     
     def _monitor_positions(self):
         """포지션 모니터링"""
         try:
-            # 현재가 업데이트
-            self._update_position_prices()
-            
-            # 포지션 정보 업데이트
             for code, position in self.positions.items():
-                old_pl = position.profit_loss
-                position.profit_loss = (position.current_price - position.avg_price) * position.quantity
-                position.profit_loss_rate = (position.current_price - position.avg_price) / position.avg_price
-                
-                # 콜백 호출
-                if self.on_position_updated and old_pl != position.profit_loss:
-                    self.on_position_updated(position)
-                    
-        except Exception as e:
-            handle_error(
-                ErrorType.MONITORING,
-                "포지션 모니터링 실패",
-                exception=e,
-                error_level=ErrorLevel.WARNING
-            )
-    
-    def _check_stop_loss_take_profit(self):
-        """손절매/익절매 확인"""
-        try:
-            for code, position in list(self.positions.items()):
-                # 손절매 확인
-                if position.current_price <= position.stop_loss_price:
-                    logger.warning(f"손절매 실행: {code} @ {position.current_price:,}원")
-                    self._execute_stop_loss(position)
-                
-                # 익절매 확인
-                elif position.current_price >= position.take_profit_price:
-                    logger.info(f"익절매 실행: {code} @ {position.current_price:,}원")
-                    self._execute_take_profit(position)
-                    
-        except Exception as e:
-            handle_error(
-                ErrorType.MONITORING,
-                "손절매/익절매 확인 실패",
-                exception=e,
-                error_level=ErrorLevel.WARNING
-            )
-    
-    def _execute_stop_loss(self, position: Position):
-        """손절매 실행"""
-        try:
-            if self.config.mode == TradeMode.PAPER_TRADING:
-                success = self._paper_trading_sell(position.code, position.quantity, position.current_price)
-            else:
-                result = self.kiwoom_api.order_stock(
-                    self.account, position.code, position.quantity, position.current_price, "신규매도"
-                )
-                success = result.get('success', False)
-            
-            if success:
-                profit_loss = (position.current_price - position.avg_price) * position.quantity
-                self._update_performance(profit_loss)
-                del self.positions[position.code]
-                self.daily_stats['total_trades'] += 1
-                
-                logger.info(f"손절매 완료: {position.code} (손실: {profit_loss:+,}원)")
-                
-        except Exception as e:
-            handle_error(
-                ErrorType.TRADING,
-                f"손절매 실행 실패 ({position.code})",
-                exception=e,
-                error_level=ErrorLevel.CRITICAL
-            )
-    
-    def _execute_take_profit(self, position: Position):
-        """익절매 실행"""
-        try:
-            if self.config.mode == TradeMode.PAPER_TRADING:
-                success = self._paper_trading_sell(position.code, position.quantity, position.current_price)
-            else:
-                result = self.kiwoom_api.order_stock(
-                    self.account, position.code, position.quantity, position.current_price, "신규매도"
-                )
-                success = result.get('success', False)
-            
-            if success:
-                profit_loss = (position.current_price - position.avg_price) * position.quantity
-                self._update_performance(profit_loss)
-                del self.positions[position.code]
-                self.daily_stats['total_trades'] += 1
-                
-                logger.info(f"익절매 완료: {position.code} (수익: {profit_loss:+,}원)")
-                
-        except Exception as e:
-            handle_error(
-                ErrorType.TRADING,
-                f"익절매 실행 실패 ({position.code})",
-                exception=e,
-                error_level=ErrorLevel.CRITICAL
-            )
-    
-    def _update_position_prices(self):
-        """포지션 가격 업데이트"""
-        try:
-            for code in self.positions:
+                # 현재가 조회
                 current_price = self.kiwoom_api.get_current_price(code)
                 if current_price:
-                    self.positions[code].current_price = current_price
-                    
+                    position.current_price = current_price
+                    position.profit_loss = (current_price - position.avg_price) * position.quantity
+                    position.profit_loss_rate = (current_price - position.avg_price) / position.avg_price * 100
+                    position.timestamp = datetime.now()
+        
         except Exception as e:
-            handle_error(
-                ErrorType.MONITORING,
-                "포지션 가격 업데이트 실패",
-                exception=e,
-                error_level=ErrorLevel.WARNING
-            )
+            logger.error(f"포지션 모니터링 오류: {e}")
     
-    def _update_positions(self):
-        """보유 종목 업데이트"""
+    def _check_stop_loss_take_profit(self):
+        """손절/익절 체크"""
         try:
-            position_info = self.kiwoom_api.get_position_info(self.account)
-            if position_info:
-                # 보유 종목 정보 파싱 및 업데이트
-                # 실제 구현에서는 position_info의 구조에 따라 파싱 필요
-                pass
+            for code, position in list(self.positions.items()):
+                current_price = position.current_price
+                avg_price = position.avg_price
                 
+                # 손절 체크
+                if current_price <= avg_price * (1 - self.config.stop_loss_percentage / 100):
+                    logger.info(f"손절 실행: {code} - 현재가: {current_price:,}원")
+                    self._execute_emergency_sell(code, "손절")
+                
+                # 익절 체크
+                elif current_price >= avg_price * (1 + self.config.take_profit_percentage / 100):
+                    logger.info(f"익절 실행: {code} - 현재가: {current_price:,}원")
+                    self._execute_emergency_sell(code, "익절")
+        
         except Exception as e:
-            handle_error(
-                ErrorType.MONITORING,
-                "보유 종목 업데이트 실패",
-                exception=e,
-                error_level=ErrorLevel.WARNING
-            )
+            logger.error(f"손절/익절 체크 오류: {e}")
     
-    def _check_order_status(self):
-        """주문 상태 확인"""
+    def _execute_emergency_sell(self, code: str, reason: str):
+        """긴급 매도 실행"""
         try:
-            # 주문 상태 확인 로직
-            # 실제 구현에서는 키움 API를 통해 주문 상태 조회
-            pass
+            if code not in self.positions:
+                return
             
-        except Exception as e:
-            handle_error(
-                ErrorType.MONITORING,
-                "주문 상태 확인 실패",
-                exception=e,
-                error_level=ErrorLevel.WARNING
+            position = self.positions[code]
+            
+            # 매도 신호 생성
+            signal = TradingSignal(
+                strategy=StrategyType.COMBINED_STRATEGY,
+                signal_type=SignalType.SELL,
+                confidence=1.0,
+                price=position.current_price,
+                timestamp=datetime.now(),
+                details={'reason': reason}
             )
+            
+            # 매도 실행
+            if self.config.trading_mode == TradingMode.PAPER_TRADING:
+                self._execute_paper_sell(code, position.current_price, position.quantity, signal)
+            else:
+                self._execute_real_sell(code, position.current_price, position.quantity, signal)
+        
+        except Exception as e:
+            logger.error(f"긴급 매도 실행 오류: {e}")
+    
+    def _check_daily_loss_limit(self) -> bool:
+        """일일 손실 한도 체크"""
+        return self.daily_pnl <= -self.config.daily_loss_limit
     
     def _is_trading_time(self) -> bool:
         """거래 시간 확인"""
         now = datetime.now()
-        start_hour, end_hour = self.config.trading_hours
+        current_time = now.strftime("%H:%M")
         
-        # 주말 제외
-        if now.weekday() >= 5:  # 토요일(5), 일요일(6)
+        # 점심시간 체크
+        if self.config.lunch_break_start <= current_time <= self.config.lunch_break_end:
             return False
         
-        # 거래 시간 확인
-        return start_hour <= now.hour < end_hour
+        # 거래시간 체크
+        return self.config.trading_start_time <= current_time <= self.config.trading_end_time
     
-    def _check_daily_loss_limit(self) -> bool:
-        """일일 손실 한도 확인"""
+    def _get_available_capital(self) -> float:
+        """사용 가능한 자금 조회"""
         try:
-            total_pl = self.daily_stats['total_profit'] + self.daily_stats['total_loss']
-            loss_rate = abs(min(total_pl, 0)) / self.deposit if self.deposit > 0 else 0
-            
-            return loss_rate <= self.config.max_daily_loss
-            
-        except Exception as e:
-            handle_error(
-                ErrorType.TRADING,
-                "일일 손실 한도 확인 실패",
-                exception=e,
-                error_level=ErrorLevel.WARNING
-            )
-            return True
-    
-    def _update_performance(self, profit_loss: float):
-        """성과 업데이트"""
-        try:
-            if profit_loss > 0:
-                self.daily_stats['winning_trades'] += 1
-                self.daily_stats['total_profit'] += profit_loss
+            if self.config.trading_mode == TradingMode.PAPER_TRADING:
+                # 페이퍼 트레이딩: 초기 자금에서 사용된 자금 차감
+                used_capital = sum(pos.avg_price * pos.quantity for pos in self.positions.values())
+                return self.config.initial_capital - used_capital
             else:
-                self.daily_stats['losing_trades'] += 1
-                self.daily_stats['total_loss'] += profit_loss
+                # 실제 거래: 예수금 조회
+                account_info = self.kiwoom_api.get_account_info()
+                if account_info:
+                    account = list(account_info.keys())[0]
+                    deposit_info = self.kiwoom_api.get_deposit_info(account)
+                    return deposit_info.get('available_amount', 0)
+                return 0
+        
+        except Exception as e:
+            logger.error(f"사용 가능한 자금 조회 오류: {e}")
+            return 0
+    
+    def _load_account_info(self):
+        """계좌 정보 로드"""
+        try:
+            account_info = self.kiwoom_api.get_account_info()
+            if account_info:
+                logger.info(f"계좌 정보 로드 완료: {len(account_info)}개 계좌")
+            
+            # 포지션 정보 로드
+            if account_info:
+                account = list(account_info.keys())[0]
+                position_info = self.kiwoom_api.get_position_info(account)
+                if position_info:
+                    logger.info(f"포지션 정보 로드 완료: {len(position_info.get('positions', []))}개 포지션")
+        
+        except Exception as e:
+            logger.error(f"계좌 정보 로드 오류: {e}")
+    
+    def _update_statistics(self):
+        """통계 업데이트"""
+        try:
+            # 승률 계산
+            if self.stats['total_trades'] > 0:
+                win_rate = (self.stats['winning_trades'] / self.stats['total_trades']) * 100
+                self.stats['win_rate'] = win_rate
             
             # 최대 낙폭 계산
-            total_pl = self.daily_stats['total_profit'] + self.daily_stats['total_loss']
-            if total_pl < self.daily_stats['max_drawdown']:
-                self.daily_stats['max_drawdown'] = total_pl
-            
-            self.daily_stats['current_drawdown'] = total_pl
-            
+            if self.trades:
+                cumulative_pnl = 0
+                max_pnl = 0
+                max_drawdown = 0
+                
+                for trade in self.trades:
+                    if trade['type'] == '매도':
+                        cumulative_pnl += trade.get('profit_loss', 0)
+                        max_pnl = max(max_pnl, cumulative_pnl)
+                        drawdown = max_pnl - cumulative_pnl
+                        max_drawdown = max(max_drawdown, drawdown)
+                
+                self.stats['max_drawdown'] = max_drawdown
+        
         except Exception as e:
-            handle_error(
-                ErrorType.TRADING,
-                "성과 업데이트 실패",
-                exception=e,
-                error_level=ErrorLevel.WARNING
-            )
+            logger.error(f"통계 업데이트 오류: {e}")
     
-    def _get_stock_name(self, code: str) -> str:
-        """종목명 조회"""
-        stock_names = {
-            '005930': '삼성전자',
-            '000660': 'SK하이닉스',
-            '035420': 'NAVER',
-            '035720': '카카오',
-            '051910': 'LG화학',
-            '006400': '삼성SDI',
-            '207940': '삼성바이오로직스',
-            '068270': '셀트리온',
-            '323410': '카카오뱅크',
-            '035760': 'CJ대한통운'
+    def _on_login(self, result: Dict):
+        """로그인 콜백"""
+        logger.info(f"로그인 결과: {result}")
+    
+    def _on_real_data(self, data: Dict):
+        """실시간 데이터 콜백"""
+        # 실시간 데이터 처리
+        pass
+    
+    def _on_order(self, data: Dict):
+        """주문 콜백"""
+        logger.info(f"주문 결과: {data}")
+        
+        # 콜백 호출
+        if self.trade_callback:
+            self.trade_callback(data)
+    
+    def set_signal_callback(self, callback: Callable):
+        """신호 콜백 설정"""
+        self.signal_callback = callback
+    
+    def set_trade_callback(self, callback: Callable):
+        """거래 콜백 설정"""
+        self.trade_callback = callback
+    
+    def set_error_callback(self, callback: Callable):
+        """에러 콜백 설정"""
+        self.error_callback = callback
+    
+    def get_status(self) -> Dict:
+        """시스템 상태 조회"""
+        return {
+            'is_running': self.is_running,
+            'is_connected': self.is_connected,
+            'is_logged_in': self.is_logged_in,
+            'trading_mode': self.config.trading_mode.value,
+            'positions_count': len(self.positions),
+            'total_trades': self.stats['total_trades'],
+            'total_profit': self.stats['total_profit'],
+            'daily_pnl': self.daily_pnl,
+            'available_capital': self._get_available_capital()
         }
-        return stock_names.get(code, f'종목({code})')
     
-    def get_performance_summary(self) -> Dict:
-        """성과 요약"""
-        try:
-            total_trades = self.daily_stats['total_trades']
-            win_rate = (self.daily_stats['winning_trades'] / total_trades * 100) if total_trades > 0 else 0
-            
-            total_pl = self.daily_stats['total_profit'] + self.daily_stats['total_loss']
-            total_return = (total_pl / self.deposit * 100) if self.deposit > 0 else 0
-            
-            return {
-                'total_trades': total_trades,
-                'winning_trades': self.daily_stats['winning_trades'],
-                'losing_trades': self.daily_stats['losing_trades'],
-                'win_rate': round(win_rate, 2),
-                'total_profit': self.daily_stats['total_profit'],
-                'total_loss': self.daily_stats['total_loss'],
-                'total_pl': total_pl,
-                'total_return': round(total_return, 2),
-                'max_drawdown': self.daily_stats['max_drawdown'],
-                'current_drawdown': self.daily_stats['current_drawdown'],
-                'deposit': self.deposit,
-                'positions_count': len(self.positions)
-            }
-            
-        except Exception as e:
-            handle_error(
-                ErrorType.ANALYSIS,
-                "성과 요약 생성 실패",
-                exception=e,
-                error_level=ErrorLevel.WARNING
-            )
-            return {}
+    def get_positions(self) -> Dict[str, Position]:
+        """포지션 정보 조회"""
+        return self.positions
     
-    def set_callbacks(self, on_trade_executed=None, on_position_updated=None, on_error_occurred=None):
-        """콜백 함수 설정"""
-        self.on_trade_executed = on_trade_executed
-        self.on_position_updated = on_position_updated
-        self.on_error_occurred = on_error_occurred
+    def get_trades(self) -> List[Dict]:
+        """거래 이력 조회"""
+        return self.trades
+    
+    def get_statistics(self) -> Dict:
+        """통계 정보 조회"""
+        return self.stats
+    
+    def get_strategy_performance(self) -> Dict:
+        """전략 성과 조회"""
+        if self.strategy_manager:
+            return self.strategy_manager.get_performance_summary()
+        return {}
 
 def main():
     """메인 함수"""
+    logger.info("통합 자동매매 시스템 시작")
+    
+    # 설정 생성
+    config = TradeConfig(
+        trading_mode=TradingMode.PAPER_TRADING,
+        risk_level=RiskLevel.MEDIUM,
+        initial_capital=10000000,
+        max_position_size=1000000,
+        daily_loss_limit=500000
+    )
+    
+    # 자동매매 시스템 생성
+    trader = IntegratedAutoTrader(config)
+    
     try:
-        # 설정
-        config = TradeConfig(
-            mode=TradeMode.PAPER_TRADING,  # 페이퍼 트레이딩 모드
-            max_position_size=0.1,         # 최대 10%
-            stop_loss_rate=0.05,           # 5% 손절매
-            take_profit_rate=0.15,         # 15% 익절매
-            max_daily_loss=0.03,           # 일일 최대 3% 손실
-            min_confidence=0.7,            # 최소 70% 신뢰도
-            trading_hours=(9, 15),         # 9시~15시
-            max_orders_per_day=10,         # 일일 최대 10주문
-            kiwoom_server_url="http://localhost:8080"
-        )
+        # 시스템 초기화
+        if not trader.initialize():
+            logger.error("시스템 초기화 실패")
+            return False
         
-        # 자동매매 시스템 생성
-        trader = IntegratedAutoTrader(config)
+        # 키움 API 연결
+        if not trader.connect():
+            logger.error("키움 API 연결 실패")
+            return False
         
-        # 콜백 함수 설정
-        def on_trade_executed(signal, position):
-            logger.info(f"거래 실행: {signal.code} {signal.signal_type}")
+        # 로그인 (설정 파일에서 정보 읽기)
+        try:
+            with open("config/kiwoom_config.json", "r", encoding="utf-8") as f:
+                kiwoom_config = json.load(f)
+                login_info = kiwoom_config.get("login", {})
+                
+                if not trader.login(
+                    login_info.get("user_id", ""),
+                    login_info.get("password", ""),
+                    login_info.get("account", "")
+                ):
+                    logger.error("키움 API 로그인 실패")
+                    return False
+        except FileNotFoundError:
+            logger.warning("키움 설정 파일을 찾을 수 없습니다. 페이퍼 트레이딩 모드로 실행합니다.")
         
-        def on_position_updated(position):
-            logger.info(f"포지션 업데이트: {position.code} (손익: {position.profit_loss:+,}원)")
+        # 자동매매 시작
+        if not trader.start_trading():
+            logger.error("자동매매 시작 실패")
+            return False
         
-        def on_error_occurred(error_type, message, exception):
-            logger.error(f"에러 발생: {error_type} - {message}")
+        # 무한 루프 (Ctrl+C로 종료)
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logger.info("사용자에 의해 중단됨")
         
-        trader.set_callbacks(on_trade_executed, on_position_updated, on_error_occurred)
+        # 자동매매 중지
+        trader.stop_trading()
         
-        # 키움 API 연결 (실제 계정 정보 필요)
-        # if trader.connect_kiwoom("user_id", "password", "account"):
-        #     # 자동매매 시작
-        #     if trader.start_trading():
-        #         logger.info("자동매매 시작됨")
-        #         
-        #         # 무한 루프
-        #         try:
-        #             while True:
-        #                 time.sleep(60)
-        #                 
-        #                 # 성과 출력
-        #                 summary = trader.get_performance_summary()
-        #                 if summary:
-        #                     logger.info(f"성과: {summary}")
-        #                     
-        #         except KeyboardInterrupt:
-        #             trader.stop_trading()
-        #             logger.info("자동매매 종료")
-        #     else:
-        #         logger.error("자동매매 시작 실패")
-        # else:
-        #     logger.error("키움 API 연결 실패")
+        # 최종 통계 출력
+        stats = trader.get_statistics()
+        logger.info(f"최종 통계: {stats}")
         
-        # 테스트용 (연결 없이)
-        logger.info("테스트 모드로 실행")
-        trader.is_connected = True
-        trader.account = "TEST_ACCOUNT"
-        trader.deposit = 10000000  # 1천만원
-        
-        if trader.start_trading():
-            logger.info("테스트 자동매매 시작됨")
-            
-            try:
-                while True:
-                    time.sleep(60)
-                    
-                    # 성과 출력
-                    summary = trader.get_performance_summary()
-                    if summary:
-                        logger.info(f"성과: {summary}")
-                        
-            except KeyboardInterrupt:
-                trader.stop_trading()
-                logger.info("테스트 자동매매 종료")
-        else:
-            logger.error("테스트 자동매매 시작 실패")
+        return True
         
     except Exception as e:
-        logger.error(f"자동매매 시스템 실행 실패: {e}")
+        logger.error(f"자동매매 시스템 오류: {e}")
+        return False
 
 if __name__ == "__main__":
     main() 

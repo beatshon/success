@@ -16,10 +16,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Python 패키지 설치를 위한 requirements 파일 복사
-COPY requirements_advanced.txt .
+COPY requirements_advanced.txt requirements_aws.txt ./
 
 # Python 패키지 설치
-RUN pip install --no-cache-dir -r requirements_advanced.txt
+RUN pip install --no-cache-dir -r requirements_advanced.txt -r requirements_aws.txt
 
 # GPU 지원을 위한 TensorFlow GPU 버전 설치 (선택사항)
 RUN pip install --no-cache-dir tensorflow-gpu
@@ -42,5 +42,5 @@ EXPOSE 8000 8080 5000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# 기본 명령어 설정
-CMD ["python", "integrated_advanced_system.py"] 
+# 기본 명령어 설정 (AWS 배포용으로 gunicorn 사용)
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "4", "simple_server:app"]

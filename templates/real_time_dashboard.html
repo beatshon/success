@@ -3,355 +3,265 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>실시간 데이터 수집 대시보드</title>
+    <title>실시간 투자 대시보드</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        .card {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: none;
+            margin-bottom: 20px;
         }
-        
-        .dashboard-container {
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-            margin: 20px;
-            padding: 30px;
-        }
-        
-        .header {
+        .card-header {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 30px;
+            border: none;
         }
-        
-        .status-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            border-left: 5px solid #667eea;
-        }
-        
-        .data-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-            margin-bottom: 20px;
-            transition: transform 0.3s ease;
-        }
-        
-        .data-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .stock-item {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-left: 4px solid #28a745;
-            transition: all 0.3s ease;
-        }
-        
-        .stock-item:hover {
-            background: #e9ecef;
-            transform: translateX(5px);
-        }
-        
-        .stock-item.down {
-            border-left-color: #dc3545;
-        }
-        
         .price-up {
-            color: #28a745;
-            font-weight: bold;
-        }
-        
-        .price-down {
             color: #dc3545;
             font-weight: bold;
         }
-        
-        .btn-custom {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            color: white;
-            border-radius: 25px;
-            padding: 10px 25px;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-custom:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-            color: white;
-        }
-        
-        .btn-danger-custom {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-            border: none;
-            color: white;
-            border-radius: 25px;
-            padding: 10px 25px;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-danger-custom:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
-            color: white;
-        }
-        
-        .chart-container {
-            position: relative;
-            height: 300px;
-            margin-bottom: 20px;
-        }
-        
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .stat-card {
-            background: white;
-            border-radius: 15px;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-        }
-        
-        .stat-number {
-            font-size: 2rem;
+        .price-down {
+            color: #198754;
             font-weight: bold;
-            color: #667eea;
         }
-        
-        .stat-label {
+        .price-same {
             color: #6c757d;
-            font-size: 0.9rem;
-            margin-top: 5px;
         }
-        
-        .loading {
-            display: none;
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .spinner {
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid #667eea;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 10px;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        .alert-custom {
-            border-radius: 15px;
-            border: none;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-        }
-        
-        .table-custom {
-            background: white;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
-        }
-        
-        .table-custom th {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 15px;
-        }
-        
-        .table-custom td {
-            padding: 12px 15px;
-            border-bottom: 1px solid #dee2e6;
-        }
-        
-        .table-custom tbody tr:hover {
+        .alert-item {
+            border-left: 4px solid #dc3545;
             background-color: #f8f9fa;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .alert-warning {
+            border-left-color: #ffc107;
+        }
+        .alert-info {
+            border-left-color: #0dcaf0;
+        }
+        .alert-success {
+            border-left-color: #198754;
+        }
+        .real-time-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #28a745;
+            display: inline-block;
+            margin-right: 5px;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        .signal-buy {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+        .signal-sell {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+        .signal-hold {
+            background-color: #fff3cd;
+            border-color: #ffeaa7;
+        }
+        .news-item {
+            border-bottom: 1px solid #dee2e6;
+            padding: 10px 0;
+        }
+        .news-item:last-child {
+            border-bottom: none;
+        }
+        .sentiment-positive {
+            color: #198754;
+        }
+        .sentiment-negative {
+            color: #dc3545;
+        }
+        .sentiment-neutral {
+            color: #6c757d;
+        }
+        .portfolio-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        .system-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
         }
     </style>
 </head>
 <body>
-    <div class="dashboard-container">
+    <div class="container-fluid">
+        <!-- 시스템 상태 표시 -->
+        <div class="system-status">
+            <div class="card">
+                <div class="card-body p-2">
+                    <small>
+                        <span class="real-time-indicator"></span>
+                        <span id="connection-status">연결 중...</span>
+                    </small>
+                </div>
+            </div>
+        </div>
+
         <!-- 헤더 -->
-        <div class="header">
-            <div class="row align-items-center">
-                <div class="col-md-8">
-                    <h1><i class="fas fa-chart-line"></i> 실시간 데이터 수집 대시보드</h1>
-                    <p class="mb-0">키움 API 기반 실시간 주식 데이터 수집 및 분석 시스템</p>
-                </div>
-                <div class="col-md-4 text-end">
-                    <div id="server-status" class="badge bg-success fs-6">
-                        <i class="fas fa-circle"></i> 서버 연결됨
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="mb-0">
+                            <i class="fas fa-chart-line"></i>
+                            실시간 투자 대시보드
+                            <small class="float-end" id="current-time"></small>
+                        </h3>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 제어 패널 -->
-        <div class="row mb-4">
-            <div class="col-md-12">
-                <div class="status-card">
-                    <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <h5><i class="fas fa-cogs"></i> 시스템 제어</h5>
-                            <p class="mb-0">데이터 수집 시작/중지 및 종목 관리</p>
-                        </div>
-                        <div class="col-md-6 text-end">
-                            <button id="start-btn" class="btn btn-custom me-2">
-                                <i class="fas fa-play"></i> 수집 시작
-                            </button>
-                            <button id="stop-btn" class="btn btn-danger-custom me-2">
-                                <i class="fas fa-stop"></i> 수집 중지
-                            </button>
-                            <button id="refresh-btn" class="btn btn-outline-secondary">
-                                <i class="fas fa-sync-alt"></i> 새로고침
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 통계 카드 -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-number" id="total-stocks">0</div>
-                <div class="stat-label">구독 종목 수</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="data-received">0</div>
-                <div class="stat-label">수신 데이터</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="data-processed">0</div>
-                <div class="stat-label">처리 데이터</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="error-count">0</div>
-                <div class="stat-label">오류 수</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="uptime">00:00:00</div>
-                <div class="stat-label">가동 시간</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-number" id="last-update">-</div>
-                <div class="stat-label">마지막 업데이트</div>
-            </div>
-        </div>
-
-        <!-- 시장 분석 -->
-        <div class="row mb-4">
-            <div class="col-md-6">
-                <div class="data-card">
-                    <h5><i class="fas fa-chart-pie"></i> 시장 추세 분석</h5>
-                    <div class="chart-container">
-                        <canvas id="marketTrendChart"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="data-card">
-                    <h5><i class="fas fa-fire"></i> 급등/급락 종목</h5>
-                    <div id="hot-stocks-list" class="mt-3">
-                        <div class="loading">
-                            <div class="spinner"></div>
-                            <p>데이터 로딩 중...</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 실시간 데이터 테이블 -->
+        <!-- 실시간 가격 정보 -->
         <div class="row">
-            <div class="col-md-12">
-                <div class="data-card">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5><i class="fas fa-table"></i> 실시간 종목 데이터</h5>
-                        <div>
-                            <button id="export-btn" class="btn btn-custom btn-sm">
-                                <i class="fas fa-download"></i> 데이터 내보내기
-                            </button>
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-dollar-sign"></i>
+                            실시간 주가 정보
+                        </h5>
                         </div>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-custom">
-                            <thead>
-                                <tr>
-                                    <th>종목코드</th>
-                                    <th>종목명</th>
-                                    <th>현재가</th>
-                                    <th>등락률</th>
-                                    <th>거래량</th>
-                                    <th>거래대금</th>
-                                    <th>고가</th>
-                                    <th>저가</th>
-                                    <th>업데이트</th>
-                                </tr>
-                            </thead>
-                            <tbody id="stock-data-table">
-                                <tr>
-                                    <td colspan="9" class="text-center">
-                                        <div class="loading">
-                                            <div class="spinner"></div>
-                                            <p>실시간 데이터 로딩 중...</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover" id="price-table">
+                                <thead>
+                                    <tr>
+                                        <th>종목코드</th>
+                                        <th>종목명</th>
+                                        <th>현재가</th>
+                                        <th>변동</th>
+                                        <th>변동률</th>
+                                        <th>거래량</th>
+                                        <th>시가</th>
+                                        <th>고가</th>
+                                        <th>저가</th>
+                                        <th>시간</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="price-tbody">
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 알림 영역 -->
-        <div id="alert-container" class="position-fixed top-0 end-0 p-3" style="z-index: 1050;"></div>
-    </div>
-
-    <!-- 종목 구독 모달 -->
-    <div class="modal fade" id="subscribeModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">종목 구독 관리</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="stock-codes" class="form-label">종목 코드 (쉼표로 구분)</label>
-                        <input type="text" class="form-control" id="stock-codes" 
-                               placeholder="예: 005930,000660,035420">
+        <!-- 차트와 포트폴리오 -->
+        <div class="row">
+            <!-- 가격 차트 -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-chart-area"></i>
+                            실시간 가격 차트
+                        </h5>
+            </div>
+                    <div class="card-body">
+                        <canvas id="price-chart" height="300"></canvas>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
-                    <button type="button" class="btn btn-custom" id="subscribe-confirm">구독</button>
+            </div>
+
+            <!-- 포트폴리오 요약 -->
+            <div class="col-md-4">
+                <div class="card portfolio-card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-briefcase"></i>
+                            포트폴리오 현황
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <h4 id="total-value">₩0</h4>
+                                <small>총 자산</small>
+                            </div>
+                            <div class="col-6">
+                                <h4 id="total-return">0.00%</h4>
+                                <small>수익률</small>
+                            </div>
+                        </div>
+                        <hr>
+                        <div id="portfolio-positions">
+                            <!-- 포지션 정보가 여기에 동적으로 추가됩니다 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 뉴스와 신호 -->
+        <div class="row">
+            <!-- 실시간 뉴스 -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-newspaper"></i>
+                            실시간 뉴스
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="news-container" style="max-height: 400px; overflow-y: auto;">
+                            <!-- 뉴스 아이템들이 여기에 동적으로 추가됩니다 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 투자 신호 -->
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-signal"></i>
+                            투자 신호
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="signals-container" style="max-height: 400px; overflow-y: auto;">
+                            <!-- 투자 신호들이 여기에 동적으로 추가됩니다 -->
+                                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 알림 섹션 -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i class="fas fa-bell"></i>
+                            실시간 알림
+                        </h5>
+    </div>
+                    <div class="card-body">
+                        <div id="alerts-container">
+                            <!-- 알림들이 여기에 동적으로 추가됩니다 -->
+                </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -359,338 +269,401 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        class RealTimeDashboard {
-            constructor() {
-                this.apiBase = '/api';
-                this.updateInterval = 5000; // 5초마다 업데이트
-                this.charts = {};
-                this.isRunning = false;
+        // WebSocket 연결
+        let ws = null;
+        let priceChart = null;
+        let chartData = {
+            labels: [],
+            datasets: [{
+                label: '삼성전자',
+                data: [],
+                borderColor: 'rgb(75, 192, 192)',
+                tension: 0.1
+            }]
+        };
+
+        // 시스템 상태
+        let systemStatus = {
+            connected: false,
+            lastUpdate: null
+        };
+
+        // 데이터 캐시
+        let priceCache = {};
+        let newsCache = {};
+        let portfolioCache = {};
+        let signalsCache = {};
+        let alertsCache = {};
+
+        // WebSocket 연결 함수
+        function connectWebSocket() {
+            const wsUrl = `ws://${window.location.hostname}:8765`;
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = function(event) {
+                console.log('WebSocket 연결됨');
+                systemStatus.connected = true;
+                updateConnectionStatus();
                 
-                this.initializeEventListeners();
-                this.initializeCharts();
-                this.startAutoUpdate();
+                // 구독 요청
+                subscribeToData();
+            };
+
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                handleWebSocketMessage(data);
+            };
+
+            ws.onclose = function(event) {
+                console.log('WebSocket 연결 종료');
+                systemStatus.connected = false;
+                updateConnectionStatus();
+                
+                // 재연결 시도
+                setTimeout(connectWebSocket, 5000);
+            };
+
+            ws.onerror = function(error) {
+                console.error('WebSocket 오류:', error);
+                systemStatus.connected = false;
+                updateConnectionStatus();
+            };
+        }
+
+        // 데이터 구독
+        function subscribeToData() {
+            const subscriptions = [
+                { type: 'subscribe', data_type: 'price' },
+                { type: 'subscribe', data_type: 'news' },
+                { type: 'subscribe', data_type: 'portfolio' },
+                { type: 'subscribe', data_type: 'signal' },
+                { type: 'subscribe', data_type: 'alert' }
+            ];
+
+            subscriptions.forEach(sub => {
+                ws.send(JSON.stringify(sub));
+            });
+        }
+
+        // WebSocket 메시지 처리
+        function handleWebSocketMessage(data) {
+            systemStatus.lastUpdate = new Date();
+            
+            switch(data.data_type) {
+                case 'price':
+                    handlePriceData(data.data);
+                    break;
+                case 'news':
+                    handleNewsData(data.data);
+                    break;
+                case 'portfolio':
+                    handlePortfolioData(data.data);
+                    break;
+                case 'signal':
+                    handleSignalData(data.data);
+                    break;
+                case 'alert':
+                    handleAlertData(data.data);
+                    break;
+            }
+        }
+
+        // 가격 데이터 처리
+        function handlePriceData(priceData) {
+            if (Array.isArray(priceData)) {
+                priceData.forEach(price => {
+                    priceCache[price.stock_code] = price;
+                });
+            } else {
+                priceCache[priceData.stock_code] = priceData;
             }
             
-            initializeEventListeners() {
-                // 제어 버튼
-                document.getElementById('start-btn').addEventListener('click', () => this.startCollection());
-                document.getElementById('stop-btn').addEventListener('click', () => this.stopCollection());
-                document.getElementById('refresh-btn').addEventListener('click', () => this.refreshData());
-                document.getElementById('export-btn').addEventListener('click', () => this.exportData());
-                
-                // 종목 구독
-                document.getElementById('subscribe-confirm').addEventListener('click', () => this.subscribeStocks());
+            updatePriceTable();
+            updatePriceChart();
+        }
+
+        // 뉴스 데이터 처리
+        function handleNewsData(newsData) {
+            if (Array.isArray(newsData)) {
+                newsData.forEach(news => {
+                    newsCache[news.news_id] = news;
+                });
+                    } else {
+                newsCache[newsData.news_id] = newsData;
             }
             
-            initializeCharts() {
-                // 시장 추세 차트
-                const marketTrendCtx = document.getElementById('marketTrendChart').getContext('2d');
-                this.charts.marketTrend = new Chart(marketTrendCtx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['상승', '하락', '보합'],
-                        datasets: [{
-                            data: [0, 0, 0],
-                            backgroundColor: ['#28a745', '#dc3545', '#6c757d'],
-                            borderWidth: 0
-                        }]
-                    },
+            updateNewsDisplay();
+        }
+
+        // 포트폴리오 데이터 처리
+        function handlePortfolioData(portfolioData) {
+            if (Array.isArray(portfolioData)) {
+                portfolioData.forEach(portfolio => {
+                    portfolioCache[portfolio.portfolio_id] = portfolio;
+                });
+                    } else {
+                portfolioCache[portfolioData.portfolio_id] = portfolioData;
+            }
+            
+            updatePortfolioDisplay();
+        }
+
+        // 신호 데이터 처리
+        function handleSignalData(signalData) {
+            if (Array.isArray(signalData)) {
+                signalData.forEach(signal => {
+                    const key = `${signal.stock_code}_${signal.timestamp}`;
+                    signalsCache[key] = signal;
+                });
+            } else {
+                const key = `${signalData.stock_code}_${signalData.timestamp}`;
+                signalsCache[key] = signalData;
+            }
+            
+            updateSignalsDisplay();
+        }
+
+        // 알림 데이터 처리
+        function handleAlertData(alertData) {
+            if (Array.isArray(alertData)) {
+                alertData.forEach(alert => {
+                    alertsCache[alert.alert_id] = alert;
+                });
+            } else {
+                alertsCache[alertData.alert_id] = alertData;
+            }
+            
+            updateAlertsDisplay();
+        }
+
+        // 가격 테이블 업데이트
+        function updatePriceTable() {
+            const tbody = document.getElementById('price-tbody');
+            tbody.innerHTML = '';
+
+            Object.values(priceCache).forEach(price => {
+                const row = document.createElement('tr');
+                
+                const changeClass = price.change_rate > 0 ? 'price-up' : 
+                                  price.change_rate < 0 ? 'price-down' : 'price-same';
+                
+                const changeIcon = price.change_rate > 0 ? '▲' : 
+                                 price.change_rate < 0 ? '▼' : '─';
+                
+                row.innerHTML = `
+                    <td>${price.stock_code}</td>
+                    <td>${price.stock_name}</td>
+                    <td>₩${price.current_price.toLocaleString()}</td>
+                    <td class="${changeClass}">${changeIcon} ${price.change.toLocaleString()}</td>
+                    <td class="${changeClass}">${(price.change_rate * 100).toFixed(2)}%</td>
+                    <td>${price.volume.toLocaleString()}</td>
+                    <td>₩${price.open_price.toLocaleString()}</td>
+                    <td>₩${price.high_price.toLocaleString()}</td>
+                    <td>₩${price.low_price.toLocaleString()}</td>
+                    <td>${new Date(price.timestamp).toLocaleTimeString()}</td>
+                `;
+                
+                tbody.appendChild(row);
+            });
+        }
+
+        // 가격 차트 업데이트
+        function updatePriceChart() {
+            const samsungPrice = priceCache['005930'];
+            if (!samsungPrice) return;
+
+            const time = new Date(samsungPrice.timestamp).toLocaleTimeString();
+            
+            chartData.labels.push(time);
+            chartData.datasets[0].data.push(samsungPrice.current_price);
+
+            // 최근 20개 데이터만 유지
+            if (chartData.labels.length > 20) {
+                chartData.labels.shift();
+                chartData.datasets[0].data.shift();
+            }
+
+            if (priceChart) {
+                priceChart.update('none');
+            } else {
+                const ctx = document.getElementById('price-chart').getContext('2d');
+                priceChart = new Chart(ctx, {
+                    type: 'line',
+                    data: chartData,
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                position: 'bottom'
+                        scales: {
+                            y: {
+                                beginAtZero: false
                             }
+                        },
+                        animation: {
+                            duration: 0
                         }
                     }
                 });
             }
-            
-            async startCollection() {
-                try {
-                    const response = await fetch(`${this.apiBase}/start`);
-                    const data = await response.json();
-                    
-                    if (response.ok) {
-                        this.showAlert('데이터 수집이 시작되었습니다.', 'success');
-                        this.isRunning = true;
-                        this.updateStatus();
-                    } else {
-                        this.showAlert(data.message || '시작 실패', 'danger');
-                    }
-                } catch (error) {
-                    this.showAlert('서버 연결 오류', 'danger');
-                }
-            }
-            
-            async stopCollection() {
-                try {
-                    const response = await fetch(`${this.apiBase}/stop`);
-                    const data = await response.json();
-                    
-                    if (response.ok) {
-                        this.showAlert('데이터 수집이 중지되었습니다.', 'warning');
-                        this.isRunning = false;
-                        this.updateStatus();
-                    } else {
-                        this.showAlert(data.message || '중지 실패', 'danger');
-                    }
-                } catch (error) {
-                    this.showAlert('서버 연결 오류', 'danger');
-                }
-            }
-            
-            async refreshData() {
-                await this.updateAllData();
-            }
-            
-            async updateAllData() {
-                await Promise.all([
-                    this.updateStatus(),
-                    this.updateStockData(),
-                    this.updateMarketTrend(),
-                    this.updateHotStocks()
-                ]);
-            }
-            
-            async updateStatus() {
-                try {
-                    const response = await fetch(`${this.apiBase}/status`);
-                    const data = await response.json();
-                    
-                    if (response.ok) {
-                        // 서버 상태 업데이트
-                        const statusElement = document.getElementById('server-status');
-                        if (data.server_running) {
-                            statusElement.className = 'badge bg-success fs-6';
-                            statusElement.innerHTML = '<i class="fas fa-circle"></i> 수집 중';
-                        } else {
-                            statusElement.className = 'badge bg-warning fs-6';
-                            statusElement.innerHTML = '<i class="fas fa-circle"></i> 대기 중';
-                        }
-                        
-                        // 통계 업데이트
-                        if (data.collector_stats) {
-                            document.getElementById('total-stocks').textContent = data.collector_stats.subscribed_count || 0;
-                            document.getElementById('data-received').textContent = data.collector_stats.data_received || 0;
-                            document.getElementById('data-processed').textContent = data.collector_stats.data_processed || 0;
-                            document.getElementById('error-count').textContent = data.collector_stats.errors || 0;
-                            
-                            if (data.collector_stats.last_update) {
-                                const lastUpdate = new Date(data.collector_stats.last_update);
-                                document.getElementById('last-update').textContent = lastUpdate.toLocaleTimeString();
-                            }
-                        }
-                    }
-                } catch (error) {
-                    console.error('상태 업데이트 오류:', error);
-                }
-            }
-            
-            async updateStockData() {
-                try {
-                    const response = await fetch(`${this.apiBase}/data`);
-                    const data = await response.json();
-                    
-                    if (response.ok && data.data) {
-                        this.renderStockTable(data.data);
-                    }
-                } catch (error) {
-                    console.error('종목 데이터 업데이트 오류:', error);
-                }
-            }
-            
-            renderStockTable(stocks) {
-                const tbody = document.getElementById('stock-data-table');
+        }
+
+        // 뉴스 표시 업데이트
+        function updateNewsDisplay() {
+            const container = document.getElementById('news-container');
+            container.innerHTML = '';
+
+            const sortedNews = Object.values(newsCache)
+                .sort((a, b) => new Date(b.published_at) - new Date(a.published_at))
+                .slice(0, 10);
+
+            sortedNews.forEach(news => {
+                const sentimentClass = news.sentiment_score > 0.3 ? 'sentiment-positive' :
+                                     news.sentiment_score < -0.3 ? 'sentiment-negative' : 'sentiment-neutral';
                 
-                if (stocks.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="9" class="text-center">데이터가 없습니다.</td></tr>';
-                    return;
-                }
-                
-                tbody.innerHTML = stocks.map(stock => `
-                    <tr>
-                        <td><strong>${stock.code}</strong></td>
-                        <td>${stock.name}</td>
-                        <td class="${stock.change_rate >= 0 ? 'price-up' : 'price-down'}">
-                            ${stock.current_price.toLocaleString()}원
-                        </td>
-                        <td class="${stock.change_rate >= 0 ? 'price-up' : 'price-down'}">
-                            ${stock.change_rate >= 0 ? '+' : ''}${stock.change_rate.toFixed(2)}%
-                        </td>
-                        <td>${stock.volume.toLocaleString()}</td>
-                        <td>${(stock.amount / 1000000).toFixed(0)}백만</td>
-                        <td>${stock.high_price.toLocaleString()}</td>
-                        <td>${stock.low_price.toLocaleString()}</td>
-                        <td>${new Date(stock.timestamp).toLocaleTimeString()}</td>
-                    </tr>
-                `).join('');
-            }
-            
-            async updateMarketTrend() {
-                try {
-                    const response = await fetch(`${this.apiBase}/analysis/market-trend`);
-                    const data = await response.json();
-                    
-                    if (response.ok && data.analysis) {
-                        const analysis = data.analysis;
-                        
-                        // 차트 업데이트
-                        this.charts.marketTrend.data.datasets[0].data = [
-                            analysis.up_count || 0,
-                            analysis.down_count || 0,
-                            analysis.flat_count || 0
-                        ];
-                        this.charts.marketTrend.update();
-                        
-                        // 평균 등락률 표시
-                        if (analysis.avg_change_rate !== undefined) {
-                            const avgElement = document.createElement('div');
-                            avgElement.className = 'text-center mt-2';
-                            avgElement.innerHTML = `
-                                <small class="text-muted">
-                                    평균 등락률: 
-                                    <span class="${analysis.avg_change_rate >= 0 ? 'price-up' : 'price-down'}">
-                                        ${analysis.avg_change_rate >= 0 ? '+' : ''}${analysis.avg_change_rate.toFixed(2)}%
-                                    </span>
-                                </small>
-                            `;
-                            
-                            const chartContainer = document.getElementById('marketTrendChart').parentElement;
-                            const existingAvg = chartContainer.querySelector('.text-center');
-                            if (existingAvg) {
-                                existingAvg.remove();
-                            }
-                            chartContainer.appendChild(avgElement);
-                        }
-                    }
-                } catch (error) {
-                    console.error('시장 추세 업데이트 오류:', error);
-                }
-            }
-            
-            async updateHotStocks() {
-                try {
-                    const response = await fetch(`${this.apiBase}/analysis/hot-stocks?min_change_rate=3.0`);
-                    const data = await response.json();
-                    
-                    if (response.ok && data.hot_stocks) {
-                        this.renderHotStocks(data.hot_stocks);
-                    }
-                } catch (error) {
-                    console.error('급등/급락 종목 업데이트 오류:', error);
-                }
-            }
-            
-            renderHotStocks(hotStocks) {
-                const container = document.getElementById('hot-stocks-list');
-                
-                if (hotStocks.length === 0) {
-                    container.innerHTML = '<p class="text-muted text-center">급등/급락 종목이 없습니다.</p>';
-                    return;
-                }
-                
-                container.innerHTML = hotStocks.slice(0, 5).map(stock => `
-                    <div class="stock-item ${stock.type === 'down' ? 'down' : ''}">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong>${stock.code}</strong> ${stock.name}
-                            </div>
-                            <div class="${stock.change_rate >= 0 ? 'price-up' : 'price-down'}">
-                                ${stock.change_rate >= 0 ? '+' : ''}${stock.change_rate.toFixed(2)}%
-                            </div>
+                const newsDiv = document.createElement('div');
+                newsDiv.className = 'news-item';
+                newsDiv.innerHTML = `
+                    <div class="d-flex justify-content-between">
+                        <strong>${news.title}</strong>
+                        <small class="${sentimentClass}">
+                            ${news.sentiment_label} (${(news.sentiment_score * 100).toFixed(0)}%)
+                        </small>
                         </div>
                         <div class="text-muted small">
-                            ${stock.current_price.toLocaleString()}원 | 거래량: ${stock.volume.toLocaleString()}
+                        ${news.source} • ${new Date(news.published_at).toLocaleString()}
                         </div>
-                    </div>
-                `).join('');
-            }
-            
-            async exportData() {
-                try {
-                    const response = await fetch(`${this.apiBase}/export?format=csv`);
-                    const data = await response.json();
-                    
-                    if (response.ok) {
-                        this.showAlert(`데이터가 ${data.filename}로 내보내기되었습니다.`, 'success');
-                    } else {
-                        this.showAlert('데이터 내보내기 실패', 'danger');
-                    }
-                } catch (error) {
-                    this.showAlert('데이터 내보내기 오류', 'danger');
-                }
-            }
-            
-            async subscribeStocks() {
-                const codesInput = document.getElementById('stock-codes');
-                const codes = codesInput.value.split(',').map(code => code.trim()).filter(code => code);
-                
-                if (codes.length === 0) {
-                    this.showAlert('종목 코드를 입력해주세요.', 'warning');
-                    return;
-                }
-                
-                try {
-                    const response = await fetch(`${this.apiBase}/subscribe`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ codes })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (response.ok) {
-                        this.showAlert(data.message, 'success');
-                        codesInput.value = '';
-                        bootstrap.Modal.getInstance(document.getElementById('subscribeModal')).hide();
-                        this.updateStatus();
-                    } else {
-                        this.showAlert(data.message || '구독 실패', 'danger');
-                    }
-                } catch (error) {
-                    this.showAlert('서버 연결 오류', 'danger');
-                }
-            }
-            
-            startAutoUpdate() {
-                setInterval(() => {
-                    if (this.isRunning) {
-                        this.updateAllData();
-                    }
-                }, this.updateInterval);
-            }
-            
-            showAlert(message, type) {
-                const alertContainer = document.getElementById('alert-container');
-                const alertId = 'alert-' + Date.now();
-                
-                const alertHtml = `
-                    <div id="${alertId}" class="alert alert-${type} alert-custom alert-dismissible fade show" role="alert">
-                        ${message}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    <div class="small">
+                        영향도: ${(news.impact_score * 100).toFixed(0)}%
                     </div>
                 `;
                 
-                alertContainer.insertAdjacentHTML('beforeend', alertHtml);
+                container.appendChild(newsDiv);
+            });
+        }
+
+        // 포트폴리오 표시 업데이트
+        function updatePortfolioDisplay() {
+            const portfolio = Object.values(portfolioCache)[0];
+            if (!portfolio) return;
+
+            document.getElementById('total-value').textContent = 
+                `₩${portfolio.total_value.toLocaleString()}`;
+            
+            const returnElement = document.getElementById('total-return');
+            const returnRate = portfolio.total_return_rate * 100;
+            returnElement.textContent = `${returnRate.toFixed(2)}%`;
+            returnElement.className = returnRate >= 0 ? 'text-success' : 'text-danger';
+
+            // 포지션 정보 업데이트
+            const positionsContainer = document.getElementById('portfolio-positions');
+            positionsContainer.innerHTML = '';
+
+            portfolio.positions.forEach(position => {
+                const positionDiv = document.createElement('div');
+                positionDiv.className = 'row mb-2';
+                positionDiv.innerHTML = `
+                    <div class="col-8">
+                        <small>${position.stock_name}</small>
+                    </div>
+                    <div class="col-4 text-end">
+                        <small class="${position.return_rate >= 0 ? 'text-success' : 'text-danger'}">
+                            ${(position.return_rate * 100).toFixed(1)}%
+                        </small>
+                    </div>
+                `;
+                positionsContainer.appendChild(positionDiv);
+            });
+        }
+
+        // 신호 표시 업데이트
+        function updateSignalsDisplay() {
+            const container = document.getElementById('signals-container');
+            container.innerHTML = '';
+
+            const sortedSignals = Object.values(signalsCache)
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, 10);
+
+            sortedSignals.forEach(signal => {
+                const signalClass = signal.signal_type.includes('BUY') ? 'signal-buy' :
+                                  signal.signal_type.includes('SELL') ? 'signal-sell' : 'signal-hold';
                 
-                // 5초 후 자동 제거
-                setTimeout(() => {
-                    const alert = document.getElementById(alertId);
-                    if (alert) {
-                        alert.remove();
-                    }
-                }, 5000);
+                const signalDiv = document.createElement('div');
+                signalDiv.className = `alert ${signalClass} mb-2`;
+                signalDiv.innerHTML = `
+                    <div class="d-flex justify-content-between">
+                        <strong>${signal.stock_name} (${signal.stock_code})</strong>
+                        <small>${signal.signal_type}</small>
+                    </div>
+                    <div class="small">
+                        신뢰도: ${(signal.confidence * 100).toFixed(0)}% | 
+                        목표가: ₩${signal.target_price.toLocaleString()} | 
+                        손절가: ₩${signal.stop_loss.toLocaleString()}
+                    </div>
+                    <div class="small text-muted">
+                        ${signal.reasoning}
+                    </div>
+                    <div class="small text-muted">
+                        ${new Date(signal.timestamp).toLocaleString()}
+                    </div>
+                `;
+                
+                container.appendChild(signalDiv);
+            });
+        }
+
+        // 알림 표시 업데이트
+        function updateAlertsDisplay() {
+            const container = document.getElementById('alerts-container');
+            container.innerHTML = '';
+
+            const sortedAlerts = Object.values(alertsCache)
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, 10);
+
+            sortedAlerts.forEach(alert => {
+                const alertDiv = document.createElement('div');
+                alertDiv.className = `alert-item alert-${alert.severity}`;
+                alertDiv.innerHTML = `
+                    <div class="d-flex justify-content-between">
+                        <strong>${alert.alert_type}</strong>
+                        <small>${new Date(alert.timestamp).toLocaleString()}</small>
+                    </div>
+                    <div>${alert.message}</div>
+                `;
+                
+                container.appendChild(alertDiv);
+            });
+        }
+
+        // 연결 상태 업데이트
+        function updateConnectionStatus() {
+            const statusElement = document.getElementById('connection-status');
+            const indicator = document.querySelector('.real-time-indicator');
+            
+            if (systemStatus.connected) {
+                statusElement.textContent = '실시간 연결됨';
+                indicator.style.backgroundColor = '#28a745';
+            } else {
+                statusElement.textContent = '연결 끊김';
+                indicator.style.backgroundColor = '#dc3545';
             }
         }
-        
-        // 대시보드 초기화
-        document.addEventListener('DOMContentLoaded', () => {
-            window.dashboard = new RealTimeDashboard();
-            window.dashboard.updateAllData();
+
+        // 현재 시간 업데이트
+        function updateCurrentTime() {
+            document.getElementById('current-time').textContent = 
+                new Date().toLocaleString();
+        }
+
+        // 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            connectWebSocket();
+            
+            // 시간 업데이트
+            setInterval(updateCurrentTime, 1000);
+            
+            // 연결 상태 업데이트
+            setInterval(updateConnectionStatus, 1000);
         });
     </script>
 </body>
