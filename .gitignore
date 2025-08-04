@@ -19,36 +19,63 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual Environment
 venv/
 env/
 ENV/
-
-# Logs
-logs/
-*.log
-
-# Data files
-data/
-*.csv
-*.xlsx
-*.json
+env.bak/
+venv.bak/
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+
+# Logs
+logs/
+*.log
 
 # OS
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
-
-# Config files with sensitive data
-config_local.py
-.env
 
 # Temporary files
 *.tmp
-*.temp 
+*.temp
+*.bak
+
+# Sensitive data
+config.py
+kiwoom_config.py
+*.key
+*.pem
+
+# Test files (too many test files)
+test_*.py
+*_test.py
+debug_*.py
+*_debug.py
+
+# Old versions
+*_old.py
+*_backup.py
+*_v1.py
+*_v2.py
+
+# Windows specific
+*.bat
+*.exe
+*.msi
+
+# Docker
+.dockerignore
+docker-compose.override.yml 
